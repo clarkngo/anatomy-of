@@ -170,10 +170,11 @@ const mask = `<defs><mask id="pc-groove" maskUnits="userSpaceOnUse" x="0" y="0" 
 const coreBody = S(G.disc(0, PENCIL.shoulder[1], CORE_R, F, P), { tone: "hi", lit: true, crease: "none" });
 const coreCap = S(G.disc(0, 0.05, CORE_R, F, P, { steps: 24 }), { tone: "hi", lit: true, crease: "none" });
 
-const moving = (id, svg, extra = "") => {
+const moving = (id, part, svg, extra = "") => {
   const [mx, my, mz] = PIECES[id].move;
-  return `<g data-move="${id}" data-m="${mx},${my},${mz}"${extra}>${svg}</g>`;
+  return `<g data-move="${id}" data-m="${mx},${my},${mz}" data-part="${part}"${extra}>${svg}</g>`;
 };
+const still = (part, svg) => `<g data-part="${part}">${svg}</g>`;
 
 const FIGURE_LABEL =
   "A new, unsharpened HB pencil lying in two cradles on a bench plate, over a millimetre rule. Taken apart, the eraser and the aluminium ferrule slide off its end, the upper cedar slat lifts away, and the thin graphite core rises out of the groove in the lower slat.";
@@ -182,47 +183,107 @@ const BODY = [
     plate(),
     fence(),
     ...CRADLES.map((cx) => cradle(cx, false)),
-    moving("eraser", eraser()),
-    shoulder(false),
-    moving("upper", shoulder(true)),
-    moving("ferrule", ferrule()),
-    lower.svg,
+    moving("eraser", "eraser", eraser()),
+    still("casing", shoulder(false)),
+    moving("upper", "casing", shoulder(true)),
+    moving("ferrule", "ferrule", ferrule()),
+    still("casing", lower.svg),
     ...CRADLES.map((cx) => cradle(cx, true)),
-    `<g mask="url(#pc-groove)">${moving("core", coreBody, ' data-core-body="" style="visibility:hidden"')}</g>`,
-    moving("upper", upperSlat.svg),
-    moving("core", coreCap),
+    `<g mask="url(#pc-groove)">${moving("core", "core", coreBody, ' data-core-body="" style="visibility:hidden"')}</g>`,
+    moving("upper", "casing", upperSlat.svg),
+    moving("core", "core", coreCap),
   ];
 const svg = k.figureSvg({ width: W, height: H, label: FIGURE_LABEL, body: BODY });
 // A still of the assembled pencil for the home page.
 if (theme === "light") writeFileSync(join(HERE, "thumb.svg"), k.figureSvg({ width: W, height: H, label: FIGURE_LABEL, body: BODY, standalone: "light" }).replace("<style>", "<style>[data-lit]>.iso-fill{fill:#3d3d3b}[data-lit]>.iso-top{fill:#5a5a57;stroke:#5a5a57}[data-lit]>.iso-shade{fill:#2f2f2d;stroke:#2f2f2d}"));
+
+// Steps: how many assemblies are off, in STAGGER order.
+const STEPS = [
+  { say: `assembled · ${PENCIL.length} mm · ${PENCIL.grade}`, next: "Take off the eraser" },
+  { say: "eraser off", next: "Slide off the ferrule" },
+  { say: "ferrule off · shoulder showing", next: "Lift the upper slat" },
+  { say: "upper slat off · core in its groove", next: "Lift out the core" },
+  { say: "apart · 5 parts", next: "Put it back together" },
+];
+// Parts, as listed under the figure: what each shows on the plate and the step that exposes it.
+const PARTS = [
+  { id: "core", show: "core", step: 4, title: "Core", fact: `core · ⌀${PENCIL.core} mm · graphite and clay, fired`, text: "Not lead. It's graphite mixed with clay and fired. More clay makes a harder, lighter line (the H grades), and more graphite a softer, darker one (the B grades). HB sits in the middle." },
+  { id: "casing", show: "casing", step: 3, title: "Casing", fact: "casing · two grooved cedar slats, glued", text: "Two slats of cedar, picked because it sharpens cleanly without splitting. Each slat has a groove, the core is glued between them, and the sandwich is cut into pencils." },
+  { id: "finish", show: "casing", step: 0, title: "Finish", fact: `finish · lacquer over a ${PENCIL.flats} mm hexagon`, text: "Several coats of lacquer seal the wood against moisture and give the grip its feel. The hexagon keeps the pencil from rolling off the desk." },
+  { id: "ferrule", show: "ferrule", step: 2, title: "Ferrule", fact: `ferrule · aluminium, ${PENCIL.ferrule[1] - PENCIL.ferrule[0]} mm, crimped`, text: "A crimped aluminium band that joins two materials that won't glue well: wood and rubber. The wood is turned down to a shoulder so the band sits flush." },
+  { id: "eraser", show: "eraser", step: 1, title: "Eraser", fact: `eraser · ${PENCIL.eraser[1] - PENCIL.eraser[0]} mm plug, ${PENCIL.eraser[1] - PENCIL.ferrule[1]} mm showing`, text: "A plug of rubber or vinyl. It works by being slightly stickier than paper, so graphite particles cling to it instead." },
+];
 
 const unit = (vector) => {
   const o = at([0, 0, 0]);
   const p = at(vector);
   return [p[0] - o[0], p[1] - o[1]];
 };
-const DATA = { EX: unit([1, 0, 0]), EY: unit([0, 1, 0]), EZ: unit([0, 0, 1]), stagger: STAGGER, spring: SPRING, length: PENCIL.length, grade: PENCIL.grade };
+const DATA = {
+  EX: unit([1, 0, 0]), EY: unit([0, 1, 0]), EZ: unit([0, 0, 1]),
+  stagger: STAGGER, spring: SPRING,
+  steps: STEPS,
+  parts: Object.fromEntries(PARTS.map(({ id, show, step, fact }) => [id, { show, step, fact }])),
+};
 
 const live = `
 const D = ${JSON.stringify(DATA)};
+const LAST = D.steps.length - 1;
 const stage = document.querySelector(".iso-stage");
 const readout = document.querySelector("[data-readout]");
+const liveText = document.querySelector("[data-live]");
+const prev = document.querySelector("[data-prev]");
+const next = document.querySelector("[data-next]");
+const dots = [...document.querySelectorAll("[data-dot]")];
+const items = [...document.querySelectorAll("[data-select]")];
 const still = matchMedia("(prefers-reduced-motion: reduce)");
 const nodes = [...stage.querySelectorAll("[data-move]")].map((el) => ({ el, id: el.dataset.move, m: el.dataset.m.split(",").map(Number), shown: "" }));
+const groups = [...stage.querySelectorAll("[data-part]")];
 const coreBody = stage.querySelector("[data-core-body]");
 const piece = Object.fromEntries(D.stagger.map((id) => [id, { x: 0, v: 0, target: 0, pending: null }]));
-let clock = 0, apart = false, touring = !still.matches, tourClock = 0, idleTimer = 0, visible = false, frame = 0, last = 0;
+let clock = 0, step = 0, selected = null, touring = !still.matches, tourClock = 0, idleTimer = 0, visible = false, frame = 0, last = 0;
 
-function setApart(on) {
-  if (apart === on) return;
-  apart = on;
-  const goal = on ? 1 : 0;
+const goalOf = (state) => (state.pending ? state.pending.value : state.target);
+const moving = () => D.stagger.some((id) => piece[id].pending || piece[id].x !== piece[id].target);
+
+function announce(text) { if (liveText.textContent !== text) liveText.textContent = text; }
+
+function setStep(n) {
+  n = Math.max(0, Math.min(LAST, n));
+  if (n === step) return;
+  const opening = n > step;
+  step = n;
   let index = 0;
-  for (const id of on ? D.stagger : [...D.stagger].reverse()) {
-    if (piece[id].target === goal) piece[id].pending = null;
-    else piece[id].pending = { value: goal, at: clock + (still.matches ? 0 : index++ * D.spring.stagger) };
+  for (const id of opening ? D.stagger : [...D.stagger].reverse()) {
+    const state = piece[id];
+    const goal = D.stagger.indexOf(id) < n ? 1 : 0;
+    if (goalOf(state) === goal) continue;
+    if (state.target === goal) { state.pending = null; continue; }
+    state.pending = { value: goal, at: clock + (still.matches ? 0 : index++ * D.spring.stagger) };
   }
+  controls();
+  if (!touring) announce(D.steps[step].say);
   run();
+}
+
+function select(id) {
+  if (selected === id) return;
+  selected = id;
+  const show = id ? D.parts[id].show : null;
+  for (const g of groups) { if (show && g.dataset.part === show) g.setAttribute("data-on", ""); else g.removeAttribute("data-on"); }
+  if (id) stage.setAttribute("data-focus", ""); else stage.removeAttribute("data-focus");
+  for (const item of items) { if (item.dataset.select === id) item.setAttribute("data-on", ""); else item.removeAttribute("data-on"); }
+  if (id) announce(D.parts[id].fact);
+  place();
+}
+
+function controls() {
+  prev.disabled = step === 0;
+  next.querySelector("span").textContent = D.steps[step].next;
+  next.setAttribute("aria-label", D.steps[step].next);
+  dots.forEach((dot, index) => (index < step ? dot.setAttribute("data-on", "") : dot.removeAttribute("data-on")));
+  stage.setAttribute("aria-valuenow", String(step));
+  stage.setAttribute("aria-valuetext", D.steps[step].say);
 }
 
 function steer(state, dt, calm) {
@@ -245,86 +306,141 @@ function place() {
     const text = share === 0 ? "" : "translate(" + tx.toFixed(2) + " " + ty.toFixed(2) + ")";
     if (text !== node.shown) { node.shown = text; if (text) node.el.setAttribute("transform", text); else node.el.removeAttribute("transform"); }
   }
-  const open = piece.upper.x > 0.03 || piece.core.x > 0.03;
-  coreBody.style.visibility = open ? "visible" : "hidden";
-  const shares = D.stagger.map((id) => piece[id].x);
-  const text = shares.every((x) => x === 0) ? "assembled · " + D.length + " mm · " + D.grade
-    : shares.every((x) => x === 1) ? "apart · 5 parts"
-    : apart ? "taking apart" : "putting together";
+  coreBody.style.visibility = piece.upper.x > 0.03 || piece.core.x > 0.03 ? "visible" : "hidden";
+  const text = selected ? D.parts[selected].fact : moving() ? D.steps[step].say.split(" · ")[0].replace(/^assembled$/, "putting together") : D.steps[step].say;
   if (readout.textContent !== text) readout.textContent = text;
-  stage.setAttribute("aria-pressed", apart ? "true" : "false");
 }
 
+// The idle tour walks the steps out and back: 0 1 2 3 4 4 3 2 1 0.
+const TOUR = 1.5;
 function tick(now) {
   const dt = last ? Math.min((now - last) / 1000, 1 / 30) : 1 / 60;
   last = now;
   clock += dt;
-  if (touring) { tourClock += dt; setApart(Math.floor(tourClock / 3.6) % 2 === 1); }
+  if (touring) {
+    tourClock += dt;
+    const beat = Math.floor(tourClock / TOUR) % (2 * (LAST + 1));
+    setStep(beat <= LAST ? beat : 2 * LAST + 1 - beat);
+  }
   let busy = false;
   for (const id of D.stagger) busy = steer(piece[id], dt, still.matches) || busy;
   place();
   frame = visible && (busy || touring) ? requestAnimationFrame(tick) : 0;
 }
 function run() { if (!frame && visible) { last = 0; frame = requestAnimationFrame(tick); } }
-function takeOver(on) {
+
+// Any action by the reader stops the tour where it is; it resumes after a quiet spell.
+function hold() {
   touring = false;
   clearTimeout(idleTimer);
-  setApart(on);
-  idleTimer = setTimeout(() => { if (!still.matches) { touring = true; tourClock = apart ? 3.6 : 0; run(); } }, 5000);
+  idleTimer = setTimeout(() => {
+    if (still.matches || selected || stage.matches(":hover, :focus-within")) return hold();
+    touring = true;
+    tourClock = step * TOUR;
+    run();
+  }, 8000);
 }
+const go = (n) => { hold(); setStep(n); };
+const forward = () => go(step === LAST ? 0 : step + 1);
 
 new IntersectionObserver((entries) => { visible = entries[entries.length - 1].isIntersecting; if (visible) run(); }, { rootMargin: "120px 0px" }).observe(stage);
-stage.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") takeOver(true); });
-stage.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") takeOver(false); });
-stage.addEventListener("pointerdown", (event) => { if (event.pointerType !== "mouse") takeOver(!apart); });
-stage.addEventListener("keydown", (event) => {
-  if (event.key === " " || event.key === "Enter" || event.key === "e" || event.key === "E") { event.preventDefault(); takeOver(!apart); }
-  if (event.key === "Escape") takeOver(false);
+
+const partAt = (target) => target.closest && target.closest("[data-part]");
+stage.addEventListener("pointermove", (event) => {
+  if (event.pointerType !== "mouse") return;
+  hold();
+  const g = partAt(event.target);
+  select(g ? PART_OF[g.dataset.part] : null);
 });
+stage.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") select(null); });
+stage.addEventListener("click", (event) => {
+  hold();
+  const g = partAt(event.target);
+  if (!g) return select(null);
+  const id = PART_OF[g.dataset.part];
+  if (event.pointerType !== "mouse") select(selected === id ? null : id);
+});
+const PART_OF = { core: "core", casing: "casing", ferrule: "ferrule", eraser: "eraser" };
+
+stage.addEventListener("keydown", (event) => {
+  const keys = { ArrowRight: () => go(step + 1), ArrowDown: () => go(step + 1), ArrowLeft: () => go(step - 1), ArrowUp: () => go(step - 1), Home: () => go(0), End: () => go(LAST), " ": forward, Enter: forward, e: forward, E: forward, Escape: () => { hold(); select(null); go(0); } };
+  if (!keys[event.key]) return;
+  event.preventDefault();
+  keys[event.key]();
+});
+prev.addEventListener("click", () => go(step - 1));
+next.addEventListener("click", forward);
+
+for (const item of items) {
+  const id = item.dataset.select;
+  item.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") { hold(); select(id); } });
+  item.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") select(null); });
+  const pick = () => { hold(); select(id); setStep(Math.max(D.parts[id].step, id === "finish" ? 0 : step)); };
+  item.addEventListener("click", pick);
+  item.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); pick(); } });
+  item.addEventListener("focus", () => { hold(); select(id); });
+  item.addEventListener("blur", () => select(null));
+}
+controls();
 place();
 `;
 
 const plateBody = k.plateHtml({
   fig: "Fig 1",
   title: "Pencil · HB",
-  hint: "Hover or press E to take apart",
-  readout: `assembled · ${PENCIL.length} mm · ${PENCIL.grade}`,
+  hint: "← → take apart · point at a part",
+  readout: STEPS[0].say,
   keys: [
     { mark: "lit", label: "The core: graphite and clay, the only part that writes" },
     { mark: "raised", label: "Cedar slats, ferrule and eraser: everything that holds it" },
   ],
   caption: `A new ${PENCIL.grade} pencil, ${PENCIL.length} mm long and ${PENCIL.flats} mm across the flats. Its ${PENCIL.core} mm core is glued into grooves between two cedar slats, and a lacquer coat seals the hexagonal body. At the far end the wood is turned down to a shoulder, and an aluminium ferrule is crimped over it and over the eraser's plug.`,
-  body: `<div class="iso-stage" tabindex="0" role="button" aria-pressed="false" aria-label="Pencil: hover, tap, or press E to take it apart and put it back together">${svg}</div>`,
+  body: `<div class="iso-stage" tabindex="0" role="slider" aria-label="Pencil. Arrow keys take it apart one part at a time; hover or tap a part to read about it." aria-valuemin="0" aria-valuemax="${STEPS.length - 1}" aria-valuenow="0" aria-valuetext="${STEPS[0].say}">${svg}</div>
+<div class="pc-controls"><button type="button" class="pc-btn" data-prev aria-label="Put the last part back" disabled>←</button><span class="pc-dots" aria-hidden="true">${STAGGER.map(() => "<i data-dot></i>").join("")}</span><button type="button" class="pc-btn pc-next" data-next><span>${STEPS[0].next}</span> →</button><span class="pc-live" aria-live="polite" data-live></span></div>`,
 });
-
-const PARTS = [
-  ["Core", "Not lead. It's graphite mixed with clay and fired. More clay makes a harder, lighter line (the H grades), and more graphite a softer, darker one (the B grades). HB sits in the middle."],
-  ["Casing", "Two slats of cedar, picked because it sharpens cleanly without splitting. Each slat has a groove, the core is glued between them, and the sandwich is cut into pencils."],
-  ["Finish", "Several coats of lacquer seal the wood against moisture and give the grip its feel. The hexagon keeps the pencil from rolling off the desk."],
-  ["Ferrule", "A crimped aluminium band that joins two materials that won't glue well: wood and rubber. The wood is turned down to a shoulder so the band sits flush."],
-  ["Eraser", "A plug of rubber or vinyl. It works by being slightly stickier than paper, so graphite particles cling to it instead."],
-];
 
 const ARTICLE_CSS = `
 [data-theme="light"] .iso-svg [data-lit]>.iso-fill{fill:#3d3d3b}
 [data-theme="light"] .iso-svg [data-lit]>.iso-top{fill:#5a5a57;stroke:#5a5a57}
 [data-theme="light"] .iso-svg [data-lit]>.iso-shade{fill:#2f2f2d;stroke:#2f2f2d}
+.iso-stage [data-part]{cursor:pointer}
+.iso-stage[data-focus] [data-part]:not([data-on]) *{stroke:var(--anatomy-faint)!important}
+.iso-stage[data-focus] [data-part]:not([data-on]) .iso-fill{fill:var(--anatomy-paper)!important}
+.iso-stage[data-focus] [data-part]:not([data-on]) .iso-top{fill:var(--anatomy-top)!important}
+.iso-stage[data-focus] [data-part]:not([data-on]) .iso-shade{fill:var(--anatomy-shade-3)!important}
+.iso-stage[data-focus] [data-part]:not([data-on]) text{fill:var(--anatomy-faint)!important}
+.pc-controls{position:relative;display:flex;align-items:center;gap:12px;margin-top:-34px;padding:0 16px 14px;font:12px/1 var(--anatomy-mono,ui-monospace,Menlo,monospace);z-index:1}
+.pc-btn{font:inherit;color:var(--anatomy-strong);background:var(--anatomy-card);border:1px solid var(--anatomy-mid);padding:7px 10px;cursor:pointer;min-height:30px}
+.pc-btn:hover{border-color:var(--anatomy-strong)}
+.pc-btn:disabled{color:var(--anatomy-lo);border-color:var(--anatomy-faint);cursor:default}
+.pc-next{margin-left:auto}
+.pc-dots{display:flex;gap:5px}
+.pc-dots i{width:6px;height:6px;border:1px solid var(--anatomy-mid);border-radius:50%}
+.pc-dots i[data-on]{background:var(--anatomy-strong);border-color:var(--anatomy-strong)}
+.pc-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.iso-plate{padding-bottom:84px}
+@media (max-width:600px){.pc-controls{margin-top:8px;padding:0 4px 4px}.iso-plate{padding-bottom:72px}}
+@media (min-width:700px) and (min-height:860px){.iso-figure{position:sticky;top:0;z-index:2;background:var(--anatomy-page);padding:16px 0 14px;margin-top:-16px;box-shadow:0 1px 0 color-mix(in srgb,var(--anatomy-muted) 30%,transparent)}}
 .pc-nav{max-width:650px;margin:0 auto;padding:24px 16px 0;font:14px/1.4 ui-monospace,Menlo,monospace}
 .pc-nav a{color:var(--anatomy-muted);text-decoration:none}.pc-nav a:hover{color:var(--anatomy-text)}
 .pc-head,.pc-parts{max-width:650px;margin:0 auto;padding:0 16px;color:var(--anatomy-text);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
 .pc-head h1{font:600 34px/1.15 Georgia,serif;margin:28px 0 8px;color:var(--anatomy-strong)}
 .pc-head p{margin:0 0 8px;color:var(--anatomy-muted)}
-.pc-parts{padding-bottom:64px}.pc-parts ol{list-style:none;margin:0;padding:0;counter-reset:p}
-.pc-parts li{counter-increment:p;display:grid;grid-template-columns:40px 1fr;gap:2px 12px;padding:16px 0;border-top:1px solid color-mix(in srgb,var(--anatomy-muted) 30%,transparent)}
-.pc-parts li::before{content:counter(p,decimal-leading-zero);grid-row:span 2;font:13px ui-monospace,Menlo,monospace;color:var(--anatomy-muted);padding-top:3px}
+.pc-parts{padding-bottom:64px}.pc-parts ol{list-style:none;margin:0;padding:0}
+.pc-parts li{display:grid;grid-template-columns:40px 1fr;gap:2px 12px;padding:16px 8px;margin:0 -8px;border-top:1px solid color-mix(in srgb,var(--anatomy-muted) 30%,transparent);cursor:pointer;transition:background .2s}
+.pc-parts li:hover,.pc-parts li[data-on]{background:var(--anatomy-card)}
+.pc-parts li:focus-visible{outline:1px solid var(--anatomy-strong);outline-offset:-1px}
+.pc-parts li .num{grid-row:span 2;font:13px ui-monospace,Menlo,monospace;color:var(--anatomy-muted);padding-top:3px}
+.pc-parts li[data-on] .num{color:var(--anatomy-strong)}
 .pc-parts h3{margin:0;font:600 18px/1.3 Georgia,serif;color:var(--anatomy-strong)}.pc-parts li p{margin:0;color:var(--anatomy-muted)}
-.pc-parts h2{font:13px ui-monospace,Menlo,monospace;text-transform:uppercase;letter-spacing:.08em;color:var(--anatomy-muted);margin:40px 0 8px}
+.pc-parts h2{font:13px ui-monospace,Menlo,monospace;text-transform:uppercase;letter-spacing:.08em;color:var(--anatomy-muted);margin:40px 0 4px}
+.pc-parts .tip{font:12px ui-monospace,Menlo,monospace;color:var(--anatomy-muted);margin:0 0 12px}
 `;
 const body = `<style>${ARTICLE_CSS}</style>
 <nav class="pc-nav"><a href="../">← anatomy/of</a></nav>
 <header class="pc-head"><h1>Anatomy of a pencil</h1><p>A wooden pencil looks like one thing. It's five, each solving a problem the others can't.</p></header>
 ${plateBody}
-<section class="pc-parts"><h2>The parts</h2><ol>${PARTS.map(([title, text]) => `<li><h3>${title}</h3><p>${text}</p></li>`).join("")}</ol></section>`;
+<section class="pc-parts"><h2>The parts</h2><p class="tip">Point at a part to find it in the figure; click it to take the pencil apart down to it.</p><ol>${PARTS.map(({ id, title, text }, index) => `<li data-select="${id}" tabindex="0" role="button" aria-label="${title}: show it in the figure"><span class="num">${String(index + 1).padStart(2, "0")}</span><h3>${title}</h3><p>${text}</p></li>`).join("")}</ol></section>`;
 
 const name = theme === "light" ? "index.html" : "dark.html";
 writeFileSync(join(HERE, name), k.pageHtml({ title: "Anatomy of a pencil", theme, body, script: kitScript() + live }));
