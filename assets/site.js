@@ -1,7 +1,8 @@
-// Renders the home-page grid from anatomies.json.
+// Renders the home-page plates from anatomies.json.
 (async function () {
   const grid = document.getElementById("grid");
   const filters = document.getElementById("filters");
+  const count = document.getElementById("count");
   if (!grid) return;
 
   let entries = [];
@@ -15,41 +16,47 @@
 
   const kinds = ["all", ...new Set(entries.map((e) => e.kind))];
   let active = "all";
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
   function renderFilters() {
     filters.innerHTML = "";
-    for (const k of kinds) {
+    if (kinds.length < 3) return; // one kind: nothing to filter
+    for (const kind of kinds) {
       const b = document.createElement("button");
       b.type = "button";
-      b.textContent = k === "all" ? "Everything" : k[0].toUpperCase() + k.slice(1) + "s";
-      b.setAttribute("aria-pressed", String(k === active));
-      b.onclick = () => { active = k; renderFilters(); renderGrid(); };
+      b.textContent = kind === "all" ? "all" : kind + "s";
+      b.setAttribute("aria-pressed", String(kind === active));
+      b.onclick = () => { active = kind; renderFilters(); renderGrid(); };
       filters.appendChild(b);
     }
   }
 
   function renderGrid() {
     const shown = entries.filter((e) => active === "all" || e.kind === active);
+    count.textContent = plural(shown.length, "figure") + ", all live";
     if (!shown.length) {
       grid.innerHTML = '<p class="empty">Nothing dissected here yet.</p>';
       return;
     }
     grid.innerHTML = "";
-    for (const e of shown) {
+    shown.forEach((e, i) => {
       const a = document.createElement("a");
-      a.className = "card";
+      a.className = "plate";
       a.href = e.slug + "/";
       a.innerHTML = `
-        <span class="kind"></span>
-        <h2></h2>
-        <p></p>
-        <span class="parts"></span>`;
-      a.querySelector(".kind").textContent = e.kind;
-      a.querySelector("h2").textContent = "Anatomy of " + e.title;
-      a.querySelector("p").textContent = e.summary;
-      a.querySelector(".parts").textContent = e.parts ? `${e.parts} parts` : "";
+        <span class="corner tl"></span>
+        <span class="corner tr"></span>
+        <img alt="" loading="lazy">
+        <div class="cap"><strong></strong><span></span></div>`;
+      a.querySelector(".tl").textContent = "Fig " + (entries.indexOf(e) + 1);
+      a.querySelector(".tr").textContent = e.kind + (e.parts ? " · " + e.parts + " parts" : "");
+      const img = a.querySelector("img");
+      if (e.thumb) img.src = e.thumb; else img.remove();
+      a.querySelector("strong").textContent = "Anatomy of " + e.title;
+      a.querySelector(".cap span").textContent = e.summary;
+      a.setAttribute("aria-label", "Anatomy of " + e.title + ". " + e.summary);
       grid.appendChild(a);
-    }
+    });
   }
 
   renderFilters();

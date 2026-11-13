@@ -175,12 +175,9 @@ const moving = (id, svg, extra = "") => {
   return `<g data-move="${id}" data-m="${mx},${my},${mz}"${extra}>${svg}</g>`;
 };
 
-const svg = k.figureSvg({
-  width: W,
-  height: H,
-  label:
-    "A new, unsharpened HB pencil lying in two cradles on a bench plate, over a millimetre rule. Taken apart, the eraser and the aluminium ferrule slide off its end, the upper cedar slat lifts away, and the thin graphite core rises out of the groove in the lower slat.",
-  body: [
+const FIGURE_LABEL =
+  "A new, unsharpened HB pencil lying in two cradles on a bench plate, over a millimetre rule. Taken apart, the eraser and the aluminium ferrule slide off its end, the upper cedar slat lifts away, and the thin graphite core rises out of the groove in the lower slat.";
+const BODY = [
     mask,
     plate(),
     fence(),
@@ -191,11 +188,13 @@ const svg = k.figureSvg({
     moving("ferrule", ferrule()),
     lower.svg,
     ...CRADLES.map((cx) => cradle(cx, true)),
-    `<g mask="url(#pc-groove)">${moving("core", coreBody, ' data-core-body style="visibility:hidden"')}</g>`,
+    `<g mask="url(#pc-groove)">${moving("core", coreBody, ' data-core-body="" style="visibility:hidden"')}</g>`,
     moving("upper", upperSlat.svg),
     moving("core", coreCap),
-  ],
-});
+  ];
+const svg = k.figureSvg({ width: W, height: H, label: FIGURE_LABEL, body: BODY });
+// A still of the assembled pencil for the home page.
+if (theme === "light") writeFileSync(join(HERE, "thumb.svg"), k.figureSvg({ width: W, height: H, label: FIGURE_LABEL, body: BODY, standalone: "light" }).replace("<style>", "<style>[data-lit]>.iso-fill{fill:#3d3d3b}[data-lit]>.iso-top{fill:#5a5a57;stroke:#5a5a57}[data-lit]>.iso-shade{fill:#2f2f2d;stroke:#2f2f2d}"));
 
 const unit = (vector) => {
   const o = at([0, 0, 0]);

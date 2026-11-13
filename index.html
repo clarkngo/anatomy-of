@@ -4,37 +4,35 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Anatomy Of</title>
-  <meta name="description" content="Labeled breakdowns of things, from real objects to abstract ideas.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;1,9..144,600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <meta name="description" content="Live breakdowns of how things work, from real objects to abstract ideas.">
+  <meta name="theme-color" content="#f2f2ef">
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="logo" href="./">anatomy<span>/</span>of</a>
+      <a class="logo" href="./">anatomy/of</a>
       <nav>
-        <a href="#all">Index</a>
+        <a href="#all">Collection</a>
         <a href="https://github.com/clarkngo/anatomy-of">GitHub</a>
       </nav>
     </div>
   </header>
 
   <main class="wrap">
-    <section class="hero">
-      <h1>The anatomy of<br><em>everything.</em></h1>
-      <p>Labeled breakdowns of the parts that make a thing work, from a pencil to an argument.</p>
+    <section class="intro">
+      <p class="byline">Anatomy of <span>· things, taken apart</span></p>
+      <p>Each figure is <em>the thing itself</em>, drawn as a live isometric machine you can take apart. From a pencil to an idea, every part is there because it does something.</p>
     </section>
 
     <section id="all">
-      <div class="filters" id="filters"></div>
+      <div class="meta"><span class="count" id="count"></span><span class="filters" id="filters"></span></div>
       <div class="grid" id="grid"></div>
     </section>
   </main>
 
   <footer class="site-footer">
-    <div class="wrap">anatomy/of · built with Claude</div>
+    <div class="wrap">Figures drawn with the <a href="https://skills.wheresryan.sh/anatomy">Anatomy</a> skill for Claude Code.</div>
   </footer>
 
   <script src="assets/site.js"></script>

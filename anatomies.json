@@ -3,7 +3,8 @@
     "slug": "pencil",
     "title": "a pencil",
     "kind": "object",
-    "summary": "Take it apart: core, two cedar slats, ferrule and eraser.",
-    "parts": 5
+    "summary": "Hover to take it apart: a graphite core between two cedar slats, a ferrule and an eraser.",
+    "parts": 5,
+    "thumb": "pencil/thumb.svg"
   }
 ]
