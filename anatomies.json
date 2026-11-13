@@ -1,0 +1,9 @@
+[
+  {
+    "slug": "pencil",
+    "title": "a pencil",
+    "kind": "object",
+    "summary": "Five materials, one stick, about 50 kilometres of line.",
+    "parts": 5
+  }
+]

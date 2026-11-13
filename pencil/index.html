@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anatomy of a Pencil</title>
+  <meta name="description" content="The five parts of a wooden pencil and what each one does.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;1,9..144,600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="logo" href="../">anatomy<span>/</span>of</a>
+      <nav><a href="../#all">Index</a></nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="entry-head">
+      <div class="kind">Object</div>
+      <h1>Anatomy of a pencil</h1>
+      <p class="lede">A wooden pencil looks like one thing. It's actually five materials, each solving a different problem.</p>
+    </section>
+
+    <figure class="figure" aria-label="Labeled diagram of a pencil">
+      <svg viewBox="0 0 900 230" role="img">
+        <!-- tip / core -->
+        <polygon points="40,115 120,88 120,142" fill="#e8c9a0"/>
+        <polygon points="40,115 66,106 66,124" fill="#3b3b3b"/>
+        <!-- painted body -->
+        <rect x="120" y="88" width="560" height="54" fill="#f2b705"/>
+        <rect x="120" y="88" width="560" height="10" fill="#f7cd3c"/>
+        <rect x="120" y="132" width="560" height="10" fill="#d99a00"/>
+        <!-- ferrule -->
+        <rect x="680" y="84" width="70" height="62" rx="3" fill="#b8bcc2"/>
+        <line x1="696" y1="84" x2="696" y2="146" stroke="#8e939a" stroke-width="2"/>
+        <line x1="734" y1="84" x2="734" y2="146" stroke="#8e939a" stroke-width="2"/>
+        <!-- eraser -->
+        <rect x="750" y="88" width="66" height="54" rx="8" fill="#ef8f9a"/>
+
+        <!-- callouts -->
+        <g>
+          <circle class="callout-dot" cx="52" cy="115" r="4"/>
+          <line class="callout-line" x1="52" y1="115" x2="52" y2="40"/>
+          <text x="40" y="30"><tspan class="callout-num">01</tspan> core</text>
+        </g>
+        <g>
+          <circle class="callout-dot" cx="100" cy="125" r="4"/>
+          <line class="callout-line" x1="100" y1="125" x2="100" y2="195"/>
+          <text x="80" y="214"><tspan class="callout-num">02</tspan> casing</text>
+        </g>
+        <g>
+          <circle class="callout-dot" cx="400" cy="92" r="4"/>
+          <line class="callout-line" x1="400" y1="92" x2="400" y2="40"/>
+          <text x="370" y="30"><tspan class="callout-num">03</tspan> finish</text>
+        </g>
+        <g>
+          <circle class="callout-dot" cx="715" cy="140" r="4"/>
+          <line class="callout-line" x1="715" y1="140" x2="715" y2="195"/>
+          <text x="680" y="214"><tspan class="callout-num">04</tspan> ferrule</text>
+        </g>
+        <g>
+          <circle class="callout-dot" cx="790" cy="92" r="4"/>
+          <line class="callout-line" x1="790" y1="92" x2="790" y2="40"/>
+          <text x="760" y="30"><tspan class="callout-num">05</tspan> eraser</text>
+        </g>
+      </svg>
+    </figure>
+
+    <h2 class="section-title">The parts</h2>
+    <ol class="parts-list">
+      <li>
+        <h3>Core</h3>
+        <p>Not lead. It's graphite mixed with clay and fired. More clay makes a harder, lighter line (the H grades). More graphite makes a softer, darker one (the B grades).</p>
+      </li>
+      <li>
+        <h3>Casing</h3>
+        <p>Usually cedar, picked because it sharpens cleanly without splintering. The core is glued between two grooved slats, then the sandwich is cut into individual pencils.</p>
+      </li>
+      <li>
+        <h3>Finish</h3>
+        <p>Several coats of lacquer seal the wood against moisture and give the grip its feel. The hexagonal shape stops the pencil rolling off the desk.</p>
+      </li>
+      <li>
+        <h3>Ferrule</h3>
+        <p>A crimped metal band, usually aluminum, that joins two materials that won't glue well: wood and rubber.</p>
+      </li>
+      <li>
+        <h3>Eraser</h3>
+        <p>A soft rubber or vinyl plug. It works by being slightly stickier than paper, so graphite particles cling to it instead.</p>
+      </li>
+    </ol>
+
+    <div class="note">
+      <p><strong>The design idea:</strong> every part exists because one material couldn't do two jobs. Graphite can't be held, wood can't mark, and rubber can't be glued to wood.</p>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">anatomy/of · built with Claude</div>
+  </footer>
+</body>
+</html>
