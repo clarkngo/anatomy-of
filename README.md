@@ -9,14 +9,22 @@ Live site: https://clarkngo.github.io/anatomy-of/
 index.html          home page (grid built from anatomies.json)
 anatomies.json      list of entries shown on the home page
 assets/             shared CSS and JS
-<slug>/index.html   one folder per anatomy, e.g. pencil/
-_template/          starting point for a new entry
+<slug>/build.mjs    builds that anatomy's page with the Anatomy kit
+<slug>/index.html   the built page, e.g. pencil/
+tools/anatomy/      vendored Anatomy kit (MIT)
 ```
 
 ## Adding an anatomy
 
-1. Copy `_template/` to a new folder named for the slug, e.g. `trust/`.
-2. Edit its `index.html`: title, kind, lede, diagram, and parts.
+Figures are live isometric machines drawn with the
+[Anatomy skill for Claude Code](https://skills.wheresryan.sh/anatomy).
+Its drawing kit is vendored in `tools/anatomy/` (MIT).
+
+1. In Claude Code, run `/anatomy explain <idea>, interactive` and ask for a
+   standalone light-theme page in a new `<slug>/` folder. `pencil/build.mjs`
+   is the reference: it writes `pencil/index.html`.
+2. Rebuild a figure any time with `node <slug>/build.mjs` (add `--dark` for a
+   dark preview at `<slug>/dark.html`, which is not committed).
 3. Add an entry to `anatomies.json`:
    ```json
    { "slug": "trust", "title": "trust", "kind": "idea", "summary": "…", "parts": 4 }
