@@ -6,5 +6,13 @@
     "summary": "Hover to take it apart: a graphite core between two cedar slats, a ferrule and an eraser.",
     "parts": 5,
     "thumb": "pencil/thumb.svg"
+  },
+  {
+    "slug": "language-model",
+    "title": "a language model",
+    "kind": "idea",
+    "summary": "Step through how it picks the next word: read the context, score every word, turn scores into odds, draw one at random.",
+    "parts": 5,
+    "thumb": "language-model/thumb.svg"
   }
 ]

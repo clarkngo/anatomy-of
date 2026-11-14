@@ -289,9 +289,11 @@ const BODY = [
     moving("core", "core", staged(coreTips)),
     `<g data-sharpener>${sharpener()}</g>`,
   ];
+// A standalone .svg is XML: every attribute needs a value.
+const xmlSafe = (text) => text.replace(/ (data-[\w-]+)(?=[\s>\/])/g, ' $1=""');
 const svg = k.figureSvg({ width: W, height: H, label: FIGURE_LABEL, body: BODY });
 // A still of the assembled pencil for the home page.
-if (theme === "light") writeFileSync(join(HERE, "thumb.svg"), k.figureSvg({ width: W, height: H, label: FIGURE_LABEL, body: BODY, standalone: "light" }).replace("<style>", "<style>[data-lit]>.iso-fill{fill:#3d3d3b}[data-lit]>.iso-top{fill:#5a5a57;stroke:#5a5a57}[data-lit]>.iso-shade{fill:#2f2f2d;stroke:#2f2f2d}"));
+if (theme === "light") writeFileSync(join(HERE, "thumb.svg"), xmlSafe(k.figureSvg({ width: W, height: H, label: FIGURE_LABEL, body: BODY, standalone: "light" }).replace("<style>", "<style>[data-lit]>.iso-fill{fill:#3d3d3b}[data-lit]>.iso-top{fill:#5a5a57;stroke:#5a5a57}[data-lit]>.iso-shade{fill:#2f2f2d;stroke:#2f2f2d}")));
 
 // Steps: how many assemblies are off, in STAGGER order.
 const STEPS = [
