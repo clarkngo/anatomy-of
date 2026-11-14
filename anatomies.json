@@ -30,5 +30,29 @@
     "summary": "Light the burner and cook it step by step: egg into hot oil, day-old rice, soy and scallion, then toss over the flame.",
     "parts": 5,
     "thumb": "fried-rice/thumb.svg"
+  },
+  {
+    "slug": "rag-pipeline",
+    "title": "a RAG pipeline",
+    "kind": "system",
+    "summary": "Step through a card-file bench: documents cut into chunks and filed once, then each question scored against every card and the top k sent to the model.",
+    "parts": 8,
+    "thumb": "rag-pipeline/thumb.svg"
+  },
+  {
+    "slug": "guardrail",
+    "title": "a tool-call guardrail",
+    "kind": "system",
+    "summary": "Feed tool calls through a go/no-go gauge: a bad one is stamped with its validation error and sent back to the model, up to max_retries.",
+    "parts": 7,
+    "thumb": "guardrail/thumb.svg"
+  },
+  {
+    "slug": "push-chain",
+    "title": "a push notification",
+    "kind": "system",
+    "summary": "Follow a notification from a background job to a phone banner, then open one of four switches and compare what the backend and the phone report.",
+    "parts": 7,
+    "thumb": "push-chain/thumb.svg"
   }
 ]
