@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as k from "../tools/anatomy/kit/iso-kit.mjs";
 import { kitScript } from "../tools/anatomy/scripts/inline-kit.mjs";
+import { EXPAND_BUTTON, EXPAND_CSS, EXPAND_JS } from "../tools/expand.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const theme = process.argv.includes("--dark") ? "dark" : "light";
@@ -652,7 +653,7 @@ place();
 const plateBody = k.plateHtml({
   fig: "Fig 2",
   title: "Language model · next word",
-  hint: "← → step · D draw · [ ] temperature",
+  hint: "← → step · D draw · [ ] temperature · F expand",
   readout: STEPS[0].say,
   keys: [
     { mark: "lit", label: "The pin: a random number, the only part that chooses" },
@@ -660,7 +661,7 @@ const plateBody = k.plateHtml({
   ],
   caption: `A language model writes one token at a time. It reads the whole context (“${CONTEXT.join(" ")}”) through a stack of layers and gives every word it knows a score. Softmax turns the scores into odds that add up to 100%, after dividing each score by the temperature. Then it draws: the odds are laid end to end along a tape, a random number picks a point, and the word under that point is appended to the context. The loop repeats for the next token. The scores here are toy numbers; the arithmetic is real.`,
   body: `<div class="iso-stage" tabindex="0" role="slider" aria-label="Language model. Arrow keys step through how it picks the next word; D draws a word; [ and ] change the temperature; hover or tap a part to read about it." aria-valuemin="0" aria-valuemax="${STEPS.length - 1}" aria-valuenow="0" aria-valuetext="${STEPS[0].say}">${svg}</div>
-<div class="pc-controls"><button type="button" class="pc-btn" data-prev aria-label="Back one step" disabled>←</button><span class="pc-dots" aria-hidden="true">${STEPS.slice(1).map(() => "<i data-dot></i>").join("")}</span><span class="pc-temp"><button type="button" class="pc-btn" data-cooler aria-label="Lower the temperature" aria-keyshortcuts="[">−</button><span data-temp>T 1.0</span><button type="button" class="pc-btn" data-warmer aria-label="Raise the temperature" aria-keyshortcuts="]">+</button></span><button type="button" class="pc-btn" data-draw aria-keyshortcuts="D">Draw</button><button type="button" class="pc-btn pc-next" data-next><span>${STEPS[0].next}</span> →</button><span class="pc-live" aria-live="polite" data-live></span></div>`,
+<div class="pc-controls"><button type="button" class="pc-btn" data-prev aria-label="Back one step" disabled>←</button><span class="pc-dots" aria-hidden="true">${STEPS.slice(1).map(() => "<i data-dot></i>").join("")}</span><span class="pc-temp"><button type="button" class="pc-btn" data-cooler aria-label="Lower the temperature" aria-keyshortcuts="[">−</button><span data-temp>T 1.0</span><button type="button" class="pc-btn" data-warmer aria-label="Raise the temperature" aria-keyshortcuts="]">+</button></span><button type="button" class="pc-btn" data-draw aria-keyshortcuts="D">Draw</button><button type="button" class="pc-btn pc-next" data-next><span>${STEPS[0].next}</span> →</button>${EXPAND_BUTTON}<span class="pc-live" aria-live="polite" data-live></span></div>`,
 });
 
 const ARTICLE_CSS = `
@@ -708,12 +709,12 @@ const ARTICLE_CSS = `
 .pc-odds b{font-weight:400;text-align:right;color:var(--anatomy-text);font-variant-numeric:tabular-nums}
 `;
 const odds = `<h2>The odds now</h2><p class="tip">Change the temperature with − and + (or [ and ]) and watch the spread.</p><ol class="pc-odds">${WORDS.map((w, i) => `<li data-bar="${i}" style="--p:${probs0[i].toFixed(4)}"><span>${w}</span><i></i><b>${Math.round(probs0[i] * 100)}%</b></li>`).join("")}</ol>`;
-const body = `<style>${ARTICLE_CSS}</style>
+const body = `<style>${ARTICLE_CSS}${EXPAND_CSS}</style>
 <nav class="pc-nav"><a href="../">← anatomy/of</a></nav>
 <header class="pc-head"><h1>Anatomy of a language model</h1><p>It doesn't plan a sentence. It picks one next word, from odds it works out fresh each time, and then does it again.</p></header>
 ${plateBody}
 <section class="pc-parts"><h2>The parts</h2><p class="tip">Point at a part to find it in the figure; click it to step the machine to it.</p><ol>${PARTS.map(({ id, title, text }, index) => `<li data-select="${id}" tabindex="0" role="button" aria-label="${title}: show it in the figure"><span class="num">${String(index + 1).padStart(2, "0")}</span><h3>${title}</h3><p>${text}</p></li>`).join("")}</ol>${odds}</section>`;
 
 const name = theme === "light" ? "index.html" : "dark.html";
-writeFileSync(join(HERE, name), k.pageHtml({ title: "Anatomy of a language model", theme, body, script: kitScript() + live }));
+writeFileSync(join(HERE, name), k.pageHtml({ title: "Anatomy of a language model", theme, body, script: kitScript() + live + EXPAND_JS }));
 console.log("wrote", name);
