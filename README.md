@@ -13,6 +13,7 @@ assets/             shared CSS and JS
 <slug>/index.html   the built page, e.g. pencil/
 tools/anatomy/      vendored Anatomy kit (MIT)
 tools/embed.mjs     the figure embed shared with the AI 410 course figures
+tools/contrast.mjs  AA text greys; every page loads it after the kit CSS
 ```
 
 ## Adding an anatomy
@@ -23,7 +24,9 @@ Its drawing kit is vendored in `tools/anatomy/` (MIT).
 
 1. In Claude Code, run `/anatomy explain <idea>, interactive` and ask for a
    standalone light-theme page in a new `<slug>/` folder. `pencil/build.mjs`
-   is the reference: it writes `pencil/index.html`.
+   is the reference: it writes `pencil/index.html`. Put `${CONTRAST_CSS}` from
+   `tools/contrast.mjs` first in the page's `<style>`: the kit's own muted grey is
+   under the 4.5:1 that WCAG AA asks of text.
 2. Rebuild a figure any time with `node <slug>/build.mjs` (add `--dark` for a
    dark preview at `<slug>/dark.html`, which is not committed).
 3. Add an entry to `anatomies.json`:

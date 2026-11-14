@@ -4,7 +4,7 @@
   --card: #fbfbfa;
   --text: #57575a;
   --strong: #18181a;
-  --muted: #8c8c90;
+  --muted: #646468; /* 5.3:1 on the page, AA for text */
   --line: #8a8a8f;
   --rule: #d4d4d6;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;

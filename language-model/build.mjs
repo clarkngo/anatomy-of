@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import * as k from "../tools/anatomy/kit/iso-kit.mjs";
 import { kitScript } from "../tools/anatomy/scripts/inline-kit.mjs";
 import { EXPAND_BUTTON, EXPAND_CSS, EXPAND_JS } from "../tools/expand.mjs";
+import { CONTRAST_CSS } from "../tools/contrast.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const theme = process.argv.includes("--dark") ? "dark" : "light";
@@ -693,12 +694,12 @@ const ARTICLE_CSS = `
 .pc-head h1{font:600 34px/1.15 Georgia,serif;margin:28px 0 8px;color:var(--anatomy-strong)}
 .pc-head p{margin:0 0 8px;color:var(--anatomy-muted)}
 .pc-parts{padding-bottom:64px}.pc-parts ol{list-style:none;margin:0;padding:0}
-.pc-parts li{display:grid;grid-template-columns:40px 1fr;gap:2px 12px;padding:16px 8px;margin:0 -8px;border-top:1px solid color-mix(in srgb,var(--anatomy-muted) 30%,transparent);cursor:pointer;transition:background .2s}
-.pc-parts li:hover,.pc-parts li[data-on]{background:var(--anatomy-card)}
-.pc-parts li:focus-visible{outline:1px solid var(--anatomy-strong);outline-offset:-1px}
-.pc-parts li .num{grid-row:span 2;font:13px ui-monospace,Menlo,monospace;color:var(--anatomy-muted);padding-top:3px}
-.pc-parts li[data-on] .num{color:var(--anatomy-strong)}
-.pc-parts h3{margin:0;font:600 18px/1.3 Georgia,serif;color:var(--anatomy-strong)}.pc-parts li p{margin:0;color:var(--anatomy-muted)}
+.pc-parts .pc-part{display:grid;grid-template-columns:40px 1fr;gap:2px 12px;padding:16px 8px;margin:0 -8px;border-top:1px solid color-mix(in srgb,var(--anatomy-muted) 30%,transparent);cursor:pointer;transition:background .2s}
+.pc-parts .pc-part:hover,.pc-parts .pc-part[data-on]{background:var(--anatomy-card)}
+.pc-parts .pc-part:focus-visible{outline:1px solid var(--anatomy-strong);outline-offset:-1px}
+.pc-parts .pc-part .num{grid-row:span 2;font:13px ui-monospace,Menlo,monospace;color:var(--anatomy-muted);padding-top:3px}
+.pc-parts .pc-part[data-on] .num{color:var(--anatomy-strong)}
+.pc-parts h3{margin:0;font:600 18px/1.3 Georgia,serif;color:var(--anatomy-strong)}.pc-parts .pc-part p{margin:0;color:var(--anatomy-muted)}
 .pc-parts h2{font:13px ui-monospace,Menlo,monospace;text-transform:uppercase;letter-spacing:.08em;color:var(--anatomy-muted);margin:40px 0 4px}
 .pc-parts .tip{font:12px ui-monospace,Menlo,monospace;color:var(--anatomy-muted);margin:0 0 12px}
 .pc-odds{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px;font:12px ui-monospace,Menlo,monospace;color:var(--anatomy-muted)}
@@ -709,11 +710,11 @@ const ARTICLE_CSS = `
 .pc-odds b{font-weight:400;text-align:right;color:var(--anatomy-text);font-variant-numeric:tabular-nums}
 `;
 const odds = `<h2>The odds now</h2><p class="tip">Change the temperature with − and + (or [ and ]) and watch the spread.</p><ol class="pc-odds">${WORDS.map((w, i) => `<li data-bar="${i}" style="--p:${probs0[i].toFixed(4)}"><span>${w}</span><i></i><b>${Math.round(probs0[i] * 100)}%</b></li>`).join("")}</ol>`;
-const body = `<style>${ARTICLE_CSS}${EXPAND_CSS}</style>
+const body = `<style>${CONTRAST_CSS}${ARTICLE_CSS}${EXPAND_CSS}</style>
 <nav class="pc-nav"><a href="../">← anatomy/of</a></nav>
 <header class="pc-head"><h1>Anatomy of a language model</h1><p>It doesn't plan a sentence. It picks one next word, from odds it works out fresh each time, and then does it again.</p></header>
 ${plateBody}
-<section class="pc-parts"><h2>The parts</h2><p class="tip">Point at a part to find it in the figure; click it to step the machine to it.</p><ol>${PARTS.map(({ id, title, text }, index) => `<li data-select="${id}" tabindex="0" role="button" aria-label="${title}: show it in the figure"><span class="num">${String(index + 1).padStart(2, "0")}</span><h3>${title}</h3><p>${text}</p></li>`).join("")}</ol>${odds}</section>`;
+<section class="pc-parts"><h2>The parts</h2><p class="tip">Point at a part to find it in the figure; click it to step the machine to it.</p><ol>${PARTS.map(({ id, title, text }, index) => `<li><div class="pc-part" data-select="${id}" tabindex="0" role="button" aria-label="${title}: show it in the figure"><span class="num">${String(index + 1).padStart(2, "0")}</span><h3>${title}</h3><p>${text}</p></div></li>`).join("")}</ol>${odds}</section>`;
 
 const name = theme === "light" ? "index.html" : "dark.html";
 writeFileSync(join(HERE, name), k.pageHtml({ title: "Anatomy of a language model", theme, body, script: kitScript() + live + EXPAND_JS }));
