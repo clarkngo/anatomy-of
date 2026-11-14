@@ -29,6 +29,12 @@ const FER_R = 3.85;
 const ER_R = SH_R;
 const GROOVE = CORE_R + 0.05;
 
+// Sharpening: a cone at a fixed half-angle. Each turn of the sharpener takes the tip further in.
+const TAPER = (11 * Math.PI) / 180; // half-angle of the point
+const LEAD = CORE_R / Math.tan(TAPER); // exposed graphite cone
+const BEVEL = APO / Math.tan(TAPER); // from the tip to where the cone meets the flats
+const SHARP = [0, 2, 5, 8, 11]; // millimetres gone from the tip end: new, then four sharpenings
+
 const W = 600;
 const H = 300;
 const X0 = 100; // the pencil's cut end, s = 0
@@ -45,14 +51,14 @@ const PIECES = {
 const STAGGER = ["eraser", "ferrule", "upper", "core"];
 const SPRING = { stagger: 0.35, stiffness: 110, damping: 20, substeps: 4 };
 
-const PLATE = { x: -142, y: -26, w: 256, d: 52, r: 7 };
+const PLATE = { x: -142, y: -26, w: 272, d: 52, r: 7 };
 const PLATE_H = 9;
 const FOOT_H = 5;
-const CRADLES = [28, 142].map((s) => X0 - s);
+const CRADLES = [46, 142].map((s) => X0 - s);
 const CRADLE_TOP = ZC - APO;
 
 const P = k.fitProjection(
-  [...k.boxCorners(PLATE, -PLATE_H - FOOT_H, 0), [X0, RAD, ZC + APO + 17], [X0 - PENCIL.length, -RAD, ZC + APO + 17]],
+  [...k.boxCorners(PLATE, -PLATE_H - FOOT_H, 0), [X0, RAD, ZC + APO + 17], [X0 - PENCIL.length, -RAD, ZC + APO + 17], [X0 + 30, 10, 30]],
   W,
   H,
   { pad: 22, azimuth: 62 },
@@ -152,23 +158,111 @@ function ferrule() {
   return S(G.ringBand(s0, s1, SH_R, FER_R, F, P), { tone: "hi", inner: L(seams, { tone: "lo" }) + L(ribs, { tone: "faint" }) });
 }
 
-function slat(upper) {
-  const paths = G.prismOf(F, upper ? UPPER_HEX : LOWER_HEX, 0, PENCIL.body, P);
-  const lines = [L(lacquer(upper ? UPPER_HEX : LOWER_HEX), { tone: "lo" })];
-  if (!upper) lines.push(L(grooveLines(0, PENCIL.body), { tone: "faint" }));
-  let text = "";
-  if (upper) text = k.faceTextSvg(k.topMatrix([X0 - 64, 0.9], ZC + APO, P, "x"), PENCIL.grade, { size: 2.2, tone: "lo" });
-  return { paths, svg: S(paths, { tone: "hi", inner: lines.join("") }) + text };
+// Half of a truncated cone, split on the plane v = 0 like the slats: a convex solid built facet by facet.
+function halfFrustum(s0, r0, s1, r1, upper, steps = 24) {
+  const V = G.viewOf(P);
+  const LT = G.lightOf(P);
+  const a0 = upper ? 0 : Math.PI;
+  const angles = Array.from({ length: steps + 1 }, (_, i) => a0 + (Math.PI * i) / steps);
+  const ringAt = (s, r) => angles.map((a) => G.pointOf(F, s, r, a));
+  const A = ringAt(s0, r0);
+  const B = ringAt(s1, r1);
+  const slope = (r1 - r0) / (s1 - s0);
+  const buckets = [[], [], [], [], []];
+  const faceOf = (points, normal) => {
+    if (G.dot3(normal, V) <= 1e-6) return false;
+    buckets[G.bandOf(G.dot3(G.unit3(normal), LT))].push(k.pathOf(points.map(at), true));
+    return true;
+  };
+  for (let j = 0; j < steps; j++) {
+    const am = (angles[j] + angles[j + 1]) / 2;
+    const normal = G.unit3(G.sub3(G.radialOf(F, am), G.mul3(F.a, slope)));
+    faceOf([A[j], A[j + 1], B[j + 1], B[j]], normal);
+  }
+  const cut = [onF(s0, r0, 0), onF(s1, r1, 0), onF(s1, -r1, 0), onF(s0, -r0, 0)];
+  const cutSeen = faceOf(cut, G.mul3(F.v, upper ? -1 : 1));
+  faceOf(A, G.mul3(F.a, -1));
+  const hull = G.hullOf([...A, ...B].map(at));
+  const crease = cutSeen ? k.pathOf([cut[0], cut[1]].map(at)) + k.pathOf([cut[2], cut[3]].map(at)) : "";
+  return { fill: k.pathOf(hull, true), outline: k.pathOf(hull, true), crease, top: buckets[4].join(""), shades: buckets.slice(0, 4).map((list) => list.join("")) };
 }
 
-const lower = slat(false);
-const lowerShoulder = G.prismOf(F, halfDisc(SH_R, false), ...PENCIL.shoulder, P);
-const upperSlat = slat(true);
+// One half of the wooden body at a sharpening stage: hex prism, plus the half cone once it has a point.
+function slat(upper, cut) {
+  const hex = upper ? UPPER_HEX : LOWER_HEX;
+  const flat = cut === 0;
+  const start = flat ? 0 : cut + BEVEL;
+  const prism = G.prismOf(F, hex, start, PENCIL.body, P);
+  const cone = flat ? null : halfFrustum(cut + LEAD, CORE_R, start, APO, upper);
+  let svg = S(prism, { tone: "hi", inner: flat ? L(lacquer(hex), { tone: "lo" }) : "" });
+  if (cone) svg += S(cone, { tone: "hi" });
+  if (!upper) {
+    const from = flat ? 0 : cut + GROOVE / Math.tan(TAPER);
+    svg += L(grooveLines(from, PENCIL.body), { tone: "faint" });
+  }
+  if (upper) svg += k.faceTextSvg(k.topMatrix([X0 - 64, 0.9], ZC + APO, P, "x"), PENCIL.grade, { size: 2.2, tone: "lo" });
+  return { prism, cone, svg };
+}
 
-// The core lies in the groove: whatever is below the slat's top face stays hidden behind it.
-const mask = `<defs><mask id="pc-groove" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#fff"/><path d="${lower.paths.fill}" fill="#000"/><path d="${lowerShoulder.fill}" fill="#000"/><path d="${lower.paths.top}" fill="#fff"/><path d="${lowerShoulder.top}" fill="#fff"/></mask></defs>`;
-const coreBody = S(G.disc(0, PENCIL.shoulder[1], CORE_R, F, P), { tone: "hi", lit: true, crease: "none" });
-const coreCap = S(G.disc(0, 0.05, CORE_R, F, P, { steps: 24 }), { tone: "hi", lit: true, crease: "none" });
+const staged = (list) => list.map((svg, i) => `<g data-stage="${i}"${i ? ' style="display:none"' : ""}>${svg}</g>`).join("");
+const lowers = SHARP.map((cut) => slat(false, cut));
+const uppers = SHARP.map((cut) => slat(true, cut));
+const lowerShoulder = G.prismOf(F, halfDisc(SH_R, false), ...PENCIL.shoulder, P);
+
+// The core lies in the groove: whatever is below the slat's top faces stays hidden behind it.
+const mask = `<defs>${lowers.map((low, i) => {
+  const black = [low.prism.fill, low.cone?.fill, lowerShoulder.fill].filter(Boolean).map((d) => `<path d="${d}" fill="#000"/>`).join("");
+  const white = [low.prism.top, low.cone?.top, lowerShoulder.top].filter(Boolean).map((d) => `<path d="${d}" fill="#fff"/>`).join("");
+  return `<mask id="pc-groove-${i}" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#fff"/>${black}${white}</mask>`;
+}).join("")}</defs>`;
+const coreBodies = SHARP.map((cut) => S(G.disc(cut ? cut + LEAD : 0, PENCIL.shoulder[1], CORE_R, F, P), { tone: "hi", lit: true, crease: "none" }));
+const coreTips = SHARP.map((cut) => (cut ? S(G.solidOf([[cut, 0], [cut + LEAD, CORE_R]], F, P), { tone: "hi", lit: true }) : S(G.disc(0, 0.05, CORE_R, F, P, { steps: 24 }), { tone: "hi", lit: true, crease: "none" })));
+
+// ---------- the sharpener: a block with a conical bore, on a carriage that runs on two rails ----------
+const SH_HOME = X0 + 5; // the bore face, parked just past the pencil's end
+const SH_BODY = { x: SH_HOME, y: -8, w: 22, d: 16, r: 2 };
+const SH_Z = [5, 23];
+const CRANK = [SH_HOME + 11, 0];
+const CRANK_Z = SH_Z[1] + 4;
+const RAILS = { from: X0 - 34, to: X0 + 30 };
+const travelFor = (cut) => SH_HOME - (X0 - (cut + BEVEL) - 1);
+
+function rails() {
+  const out = [];
+  for (const y of [-9.5, 6.5]) {
+    out.push(S(k.slabOf({ x: RAILS.from, y, w: RAILS.to - RAILS.from, d: 3, r: 0.8 }, 0, 1.6, P, 2, 0.3), { tone: "mid" }));
+    out.push(D([RAILS.from + 3, RAILS.to - 3].map((x) => at([x, y + 1.5, 1.6])), { size: 0.4 }));
+  }
+  out.push(S(k.slabOf({ x: RAILS.to, y: -11, w: 4, d: 22, r: 1 }, 0, 6, P, 3, 0.4), { tone: "mid" }));
+  out.push(D([at([RAILS.to + 2, -7, 6]), at([RAILS.to + 2, 7, 6])], { size: 0.45 }));
+  return out.join("");
+}
+
+const crankPointer = (turn) => {
+  const a = turn * Math.PI * 2;
+  return k.lineOnTop([CRANK[0] - Math.cos(a) * 1.6, CRANK[1] - Math.sin(a) * 1.6], [CRANK[0] + Math.cos(a) * 4.2, CRANK[1] + Math.sin(a) * 4.2], CRANK_Z, P);
+};
+
+function sharpener() {
+  const out = [`<path class="iso-halo" d="${k.haloOf(k.insetPlan(SH_BODY, 2), 1.6, 0.1, P)}" style="filter:blur(3px)"/>`];
+  const carriage = { x: SH_HOME - 2, y: -11, w: 26, d: 22, r: 2 };
+  out.push(S(k.slabOf(carriage, 1.6, SH_Z[0] - 1.6, P, 3, 0.5), { tone: "mid" }));
+  out.push(D([[carriage.x + 3, -8.5], [carriage.x + carriage.w - 3, -8.5], [carriage.x + 3, 8.5], [carriage.x + carriage.w - 3, 8.5]].map(([x, y]) => at([x, y, SH_Z[0]])), { size: 0.4 }));
+  const seam = k.sideSeam(SH_BODY, SH_Z[0] + 13, P, 4);
+  out.push(S(k.slabOf(SH_BODY, SH_Z[0], SH_Z[1] - SH_Z[0], P, 4, 0.8), { tone: "mid", inner: L(seam, { tone: "faint" }) }));
+  // blade, held by two screws on the visible side
+  const blade = { x: SH_HOME + 4, y: SH_BODY.y + SH_BODY.d, w: 12, d: 0.6, r: 0.2 };
+  out.push(S(k.slabOf(blade, ZC + 1, 5, P, 2), { tone: "hi", crease: "none" }));
+  out.push(D([at([blade.x + 3, blade.y + 0.6, ZC + 3.5]), at([blade.x + 9, blade.y + 0.6, ZC + 3.5])], { size: 0.5, tone: "hi" }));
+  out.push(D([[SH_BODY.x + 3, -5], [SH_BODY.x + 3, 5], [SH_BODY.x + 19, -5], [SH_BODY.x + 19, 5]].map(([x, y]) => at([x, y, SH_Z[1]])), { size: 0.4 }));
+  // the crank: a knurled knob on top whose pointer turns as it cuts
+  out.push(S(k.cylinder(CRANK[0], CRANK[1], 5.2, SH_Z[1], CRANK_Z - SH_Z[1], P, 32), { tone: "mid" }));
+  out.push(L(k.knurl(CRANK[0], CRANK[1], 5.2, SH_Z[1], CRANK_Z, 30, P), { tone: "lo" }));
+  out.push(L(k.ring(CRANK[0], CRANK[1], 3.4, CRANK_Z, P, 28), { tone: "faint" }));
+  out.push(`<path class="iso-line" data-tone="hi" data-crank data-free="both" d="${crankPointer(0)}" style="stroke-width:1"/>`);
+  out.push(D([at([CRANK[0], CRANK[1], CRANK_Z])], { size: 0.55, tone: "hi" }));
+  return out.join("");
+}
 
 const moving = (id, part, svg, extra = "") => {
   const [mx, my, mz] = PIECES[id].move;
@@ -182,16 +276,18 @@ const BODY = [
     mask,
     plate(),
     fence(),
+    rails(),
     ...CRADLES.map((cx) => cradle(cx, false)),
     moving("eraser", "eraser", eraser()),
     still("casing", shoulder(false)),
     moving("upper", "casing", shoulder(true)),
     moving("ferrule", "ferrule", ferrule()),
-    still("casing", lower.svg),
+    still("casing", staged(lowers.map((low) => low.svg))),
     ...CRADLES.map((cx) => cradle(cx, true)),
-    `<g mask="url(#pc-groove)">${moving("core", "core", coreBody, ' data-core-body="" style="visibility:hidden"')}</g>`,
-    moving("upper", "casing", upperSlat.svg),
-    moving("core", "core", coreCap),
+    `<g mask="url(#pc-groove-0)" data-groove>${moving("core", "core", staged(coreBodies), ' data-core-body="" style="visibility:hidden"')}</g>`,
+    moving("upper", "casing", staged(uppers.map((up) => up.svg))),
+    moving("core", "core", staged(coreTips)),
+    `<g data-sharpener>${sharpener()}</g>`,
   ];
 const svg = k.figureSvg({ width: W, height: H, label: FIGURE_LABEL, body: BODY });
 // A still of the assembled pencil for the home page.
@@ -224,6 +320,9 @@ const DATA = {
   stagger: STAGGER, spring: SPRING,
   steps: STEPS,
   parts: Object.fromEntries(PARTS.map(({ id, show, step, fact }) => [id, { show, step, fact }])),
+  sharp: SHARP.map((cut) => ({ length: PENCIL.length - cut, travel: travelFor(cut) })),
+  grade: PENCIL.grade,
+  P, crank: CRANK, crankZ: CRANK_Z,
 };
 
 const live = `
@@ -241,15 +340,65 @@ const nodes = [...stage.querySelectorAll("[data-move]")].map((el) => ({ el, id: 
 const groups = [...stage.querySelectorAll("[data-part]")];
 const coreBody = stage.querySelector("[data-core-body]");
 const piece = Object.fromEntries(D.stagger.map((id) => [id, { x: 0, v: 0, target: 0, pending: null }]));
+let cut = 0, job = null;
+const LAST_CUT = D.sharp.length - 1;
+const groove = stage.querySelector("[data-groove]");
+const stagedEls = [...stage.querySelectorAll("[data-stage]")];
+const sharpener = stage.querySelector("[data-sharpener]");
+const crank = stage.querySelector("[data-crank]");
+const sharpenButton = document.querySelector("[data-sharpen]");
+const crankPointer = ${crankPointer.toString().replace("k.lineOnTop", "lineOnTop").replace(/CRANK_Z/g, "D.crankZ").replace(/CRANK/g, "D.crank").replace(/, P\)/, ", D.P)")};
+// Sharpening timeline, in seconds: slide on, cut while the crank turns, slide off.
+const IN = 0.7, CUT = 1.4, OUT = 0.7, TURNS = 3;
+const ease = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 let clock = 0, step = 0, selected = null, touring = !still.matches, tourClock = 0, idleTimer = 0, visible = false, frame = 0, last = 0;
 
 const goalOf = (state) => (state.pending ? state.pending.value : state.target);
 const moving = () => D.stagger.some((id) => piece[id].pending || piece[id].x !== piece[id].target);
 
+const lengthNow = () => D.sharp[cut].length;
+const restText = () => (cut ? "sharpened · " : "new · ") + lengthNow() + " mm · " + D.grade;
+const stepText = (n) => (n === 0 ? restText() : D.steps[n].say);
+
+function setCut(n) {
+  cut = n;
+  for (const el of stagedEls) el.style.display = Number(el.dataset.stage) === cut ? "" : "none";
+  groove.setAttribute("mask", "url(#pc-groove-" + cut + ")");
+  controls();
+}
+
+function sharpen() {
+  hold();
+  if (job) return;
+  if (cut === LAST_CUT) { setCut(0); announce("a new pencil · " + lengthNow() + " mm"); place(); return; }
+  select(null);
+  job = { t: -1, to: cut + 1, swapped: false };
+  if (step !== 0) setStep(0);
+  controls();
+  run();
+}
+
+function runJob(dt) {
+  if (job.t < 0) {
+    if (step === 0 && !moving()) job.t = 0;
+    return 0;
+  }
+  if (still.matches) { setCut(job.to); job = null; announce(restText()); controls(); return 0; }
+  job.t += dt;
+  if (!job.swapped && job.t >= IN + CUT / 2) { setCut(job.to); job.swapped = true; }
+  if (job.t >= IN + CUT + OUT) { job = null; announce(restText()); controls(); return 0; }
+  const slide = job.t < IN ? ease(job.t / IN) : job.t < IN + CUT ? 1 : 1 - ease((job.t - IN - CUT) / OUT);
+  const turn = TURNS * Math.max(0, Math.min(1, (job.t - IN) / CUT));
+  crank.setAttribute("d", crankPointer(turn));
+  return slide;
+}
+let slideNow = 0;
+
 function announce(text) { if (liveText.textContent !== text) liveText.textContent = text; }
 
 function setStep(n) {
   n = Math.max(0, Math.min(LAST, n));
+  if (job && job.t >= 0) return;
   if (n === step) return;
   const opening = n > step;
   step = n;
@@ -262,7 +411,7 @@ function setStep(n) {
     state.pending = { value: goal, at: clock + (still.matches ? 0 : index++ * D.spring.stagger) };
   }
   controls();
-  if (!touring) announce(D.steps[step].say);
+  if (!touring) announce(stepText(step));
   run();
 }
 
@@ -278,12 +427,15 @@ function select(id) {
 }
 
 function controls() {
-  prev.disabled = step === 0;
+  prev.disabled = step === 0 || !!job;
+  next.disabled = !!job;
   next.querySelector("span").textContent = D.steps[step].next;
   next.setAttribute("aria-label", D.steps[step].next);
   dots.forEach((dot, index) => (index < step ? dot.setAttribute("data-on", "") : dot.removeAttribute("data-on")));
   stage.setAttribute("aria-valuenow", String(step));
-  stage.setAttribute("aria-valuetext", D.steps[step].say);
+  stage.setAttribute("aria-valuetext", stepText(step));
+  sharpenButton.querySelector("span").textContent = cut === LAST_CUT ? "New pencil" : "Sharpen";
+  sharpenButton.disabled = !!job;
 }
 
 function steer(state, dt, calm) {
@@ -307,7 +459,12 @@ function place() {
     if (text !== node.shown) { node.shown = text; if (text) node.el.setAttribute("transform", text); else node.el.removeAttribute("transform"); }
   }
   coreBody.style.visibility = piece.upper.x > 0.03 || piece.core.x > 0.03 ? "visible" : "hidden";
-  const text = selected ? D.parts[selected].fact : moving() ? D.steps[step].say.split(" · ")[0].replace(/^assembled$/, "putting together") : D.steps[step].say;
+  const tx = -D.EX[0] * D.sharp[job ? job.to : cut].travel * slideNow, ty = -D.EX[1] * D.sharp[job ? job.to : cut].travel * slideNow;
+  if (slideNow) sharpener.setAttribute("transform", "translate(" + tx.toFixed(2) + " " + ty.toFixed(2) + ")"); else sharpener.removeAttribute("transform");
+  const text = job && job.t >= 0 ? "sharpening · " + D.sharp[job.to].length + " mm left"
+    : selected ? D.parts[selected].fact
+    : moving() ? (step === 0 ? "putting together" : D.steps[step].say.split(" · ")[0])
+    : stepText(step);
   if (readout.textContent !== text) readout.textContent = text;
 }
 
@@ -317,13 +474,14 @@ function tick(now) {
   const dt = last ? Math.min((now - last) / 1000, 1 / 30) : 1 / 60;
   last = now;
   clock += dt;
-  if (touring) {
+  if (touring && !job) {
     tourClock += dt;
     const beat = Math.floor(tourClock / TOUR) % (2 * (LAST + 1));
     setStep(beat <= LAST ? beat : 2 * LAST + 1 - beat);
   }
   let busy = false;
   for (const id of D.stagger) busy = steer(piece[id], dt, still.matches) || busy;
+  if (job) { slideNow = runJob(dt); busy = true; } else slideNow = 0;
   place();
   frame = visible && (busy || touring) ? requestAnimationFrame(tick) : 0;
 }
@@ -340,7 +498,7 @@ function hold() {
     run();
   }, 8000);
 }
-const go = (n) => { hold(); setStep(n); };
+const go = (n) => { hold(); if (!job) setStep(n); };
 const forward = () => go(step === LAST ? 0 : step + 1);
 
 new IntersectionObserver((entries) => { visible = entries[entries.length - 1].isIntersecting; if (visible) run(); }, { rootMargin: "120px 0px" }).observe(stage);
@@ -363,13 +521,14 @@ stage.addEventListener("click", (event) => {
 const PART_OF = { core: "core", casing: "casing", ferrule: "ferrule", eraser: "eraser" };
 
 stage.addEventListener("keydown", (event) => {
-  const keys = { ArrowRight: () => go(step + 1), ArrowDown: () => go(step + 1), ArrowLeft: () => go(step - 1), ArrowUp: () => go(step - 1), Home: () => go(0), End: () => go(LAST), " ": forward, Enter: forward, e: forward, E: forward, Escape: () => { hold(); select(null); go(0); } };
+  const keys = { ArrowRight: () => go(step + 1), ArrowDown: () => go(step + 1), ArrowLeft: () => go(step - 1), ArrowUp: () => go(step - 1), Home: () => go(0), End: () => go(LAST), " ": forward, Enter: forward, e: forward, E: forward, Escape: () => { hold(); select(null); go(0); }, s: sharpen, S: sharpen };
   if (!keys[event.key]) return;
   event.preventDefault();
   keys[event.key]();
 });
 prev.addEventListener("click", () => go(step - 1));
 next.addEventListener("click", forward);
+sharpenButton.addEventListener("click", sharpen);
 
 for (const item of items) {
   const id = item.dataset.select;
@@ -388,15 +547,15 @@ place();
 const plateBody = k.plateHtml({
   fig: "Fig 1",
   title: "Pencil · HB",
-  hint: "← → take apart · point at a part",
-  readout: STEPS[0].say,
+  hint: "← → take apart · S sharpen",
+  readout: `new · ${PENCIL.length} mm · ${PENCIL.grade}`,
   keys: [
     { mark: "lit", label: "The core: graphite and clay, the only part that writes" },
     { mark: "raised", label: "Cedar slats, ferrule and eraser: everything that holds it" },
   ],
-  caption: `A new ${PENCIL.grade} pencil, ${PENCIL.length} mm long and ${PENCIL.flats} mm across the flats. Its ${PENCIL.core} mm core is glued into grooves between two cedar slats, and a lacquer coat seals the hexagonal body. At the far end the wood is turned down to a shoulder, and an aluminium ferrule is crimped over it and over the eraser's plug.`,
-  body: `<div class="iso-stage" tabindex="0" role="slider" aria-label="Pencil. Arrow keys take it apart one part at a time; hover or tap a part to read about it." aria-valuemin="0" aria-valuemax="${STEPS.length - 1}" aria-valuenow="0" aria-valuetext="${STEPS[0].say}">${svg}</div>
-<div class="pc-controls"><button type="button" class="pc-btn" data-prev aria-label="Put the last part back" disabled>←</button><span class="pc-dots" aria-hidden="true">${STAGGER.map(() => "<i data-dot></i>").join("")}</span><button type="button" class="pc-btn pc-next" data-next><span>${STEPS[0].next}</span> →</button><span class="pc-live" aria-live="polite" data-live></span></div>`,
+  caption: `A new ${PENCIL.grade} pencil, ${PENCIL.length} mm long and ${PENCIL.flats} mm across the flats. Its ${PENCIL.core} mm core is glued into grooves between two cedar slats, and a lacquer coat seals the hexagonal body. At the far end the wood is turned down to a shoulder, and an aluminium ferrule is crimped over it and over the eraser's plug. Sharpen it and the blade cuts wood and graphite into one cone: the core runs the whole length, so there is always more of it to bring to a point.`,
+  body: `<div class="iso-stage" tabindex="0" role="slider" aria-label="Pencil. Arrow keys take it apart one part at a time, S sharpens it; hover or tap a part to read about it." aria-valuemin="0" aria-valuemax="${STEPS.length - 1}" aria-valuenow="0" aria-valuetext="new · ${PENCIL.length} mm · ${PENCIL.grade}">${svg}</div>
+<div class="pc-controls"><button type="button" class="pc-btn" data-prev aria-label="Put the last part back" disabled>←</button><span class="pc-dots" aria-hidden="true">${STAGGER.map(() => "<i data-dot></i>").join("")}</span><button type="button" class="pc-btn pc-sharpen" data-sharpen aria-keyshortcuts="S"><span>Sharpen</span></button><button type="button" class="pc-btn pc-next" data-next><span>${STEPS[0].next}</span> →</button><span class="pc-live" aria-live="polite" data-live></span></div>`,
 });
 
 const ARTICLE_CSS = `
@@ -413,7 +572,7 @@ const ARTICLE_CSS = `
 .pc-btn{font:inherit;color:var(--anatomy-strong);background:var(--anatomy-card);border:1px solid var(--anatomy-mid);padding:7px 10px;cursor:pointer;min-height:30px}
 .pc-btn:hover{border-color:var(--anatomy-strong)}
 .pc-btn:disabled{color:var(--anatomy-lo);border-color:var(--anatomy-faint);cursor:default}
-.pc-next{margin-left:auto}
+.pc-sharpen{margin-left:auto}
 .pc-dots{display:flex;gap:5px}
 .pc-dots i{width:6px;height:6px;border:1px solid var(--anatomy-mid);border-radius:50%}
 .pc-dots i[data-on]{background:var(--anatomy-strong);border-color:var(--anatomy-strong)}
