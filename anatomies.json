@@ -14,5 +14,13 @@
     "summary": "Step through how it picks the next word: read the context, score every word, turn scores into odds, draw one at random.",
     "parts": 5,
     "thumb": "language-model/thumb.svg"
+  },
+  {
+    "slug": "hydraulic-hose",
+    "title": "a hydraulic hose",
+    "kind": "object",
+    "summary": "Take it apart layer by layer: a rubber tube, two steel braids and a cover, crimped into a fitting. Pump it to 27.5 MPa.",
+    "parts": 6,
+    "thumb": "hydraulic-hose/thumb.svg"
   }
 ]
