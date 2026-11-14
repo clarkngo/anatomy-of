@@ -12,6 +12,7 @@ assets/             shared CSS and JS
 <slug>/build.mjs    builds that anatomy's page with the Anatomy kit
 <slug>/index.html   the built page, e.g. pencil/
 tools/anatomy/      vendored Anatomy kit (MIT)
+tools/embed.mjs     the figure embed shared with the AI 410 course figures
 ```
 
 ## Adding an anatomy
@@ -30,6 +31,15 @@ Its drawing kit is vendored in `tools/anatomy/` (MIT).
    { "slug": "trust", "title": "trust", "kind": "idea", "summary": "…", "parts": 4 }
    ```
    `kind` drives the filter buttons on the home page (e.g. `object`, `idea`, `system`).
+
+## Figures from AI 410
+
+`rag-pipeline/`, `guardrail/` and `push-chain/` are copies of the lecture figures in
+[cityuseattle/ai410](https://github.com/cityuseattle/ai410) (Modules 2–4, CC BY 4.0).
+Their build scripts call the same embed as the course (`tools/embed.mjs`), so a change
+there can be copied back almost unchanged; `page()` writes the standalone page and
+`thumb.svg`. `rag-pipeline/docs.json` is a copy of the Module 2 simulator's documents,
+stop words and synonyms, so the figure ranks chunks exactly as the simulator does.
 
 ## Run locally
 
