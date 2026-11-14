@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import * as k from "../tools/anatomy/kit/iso-kit.mjs";
 import * as G from "../tools/anatomy/kit/lathe.mjs";
 import { kitScript } from "../tools/anatomy/scripts/inline-kit.mjs";
+import { EXPAND_BUTTON, EXPAND_CSS, EXPAND_JS } from "../tools/expand.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const theme = process.argv.includes("--dark") ? "dark" : "light";
@@ -549,7 +550,7 @@ place();
 const plateBody = k.plateHtml({
   fig: "Fig 1",
   title: "Pencil · HB",
-  hint: "← → take apart · S sharpen",
+  hint: "← → take apart · S sharpen · F expand",
   readout: `new · ${PENCIL.length} mm · ${PENCIL.grade}`,
   keys: [
     { mark: "lit", label: "The core: graphite and clay, the only part that writes" },
@@ -557,7 +558,7 @@ const plateBody = k.plateHtml({
   ],
   caption: `A new ${PENCIL.grade} pencil, ${PENCIL.length} mm long and ${PENCIL.flats} mm across the flats. Its ${PENCIL.core} mm core is glued into grooves between two cedar slats, and a lacquer coat seals the hexagonal body. At the far end the wood is turned down to a shoulder, and an aluminium ferrule is crimped over it and over the eraser's plug. Sharpen it and the blade cuts wood and graphite into one cone: the core runs the whole length, so there is always more of it to bring to a point.`,
   body: `<div class="iso-stage" tabindex="0" role="slider" aria-label="Pencil. Arrow keys take it apart one part at a time, S sharpens it; hover or tap a part to read about it." aria-valuemin="0" aria-valuemax="${STEPS.length - 1}" aria-valuenow="0" aria-valuetext="new · ${PENCIL.length} mm · ${PENCIL.grade}">${svg}</div>
-<div class="pc-controls"><button type="button" class="pc-btn" data-prev aria-label="Put the last part back" disabled>←</button><span class="pc-dots" aria-hidden="true">${STAGGER.map(() => "<i data-dot></i>").join("")}</span><button type="button" class="pc-btn pc-sharpen" data-sharpen aria-keyshortcuts="S"><span>Sharpen</span></button><button type="button" class="pc-btn pc-next" data-next><span>${STEPS[0].next}</span> →</button><span class="pc-live" aria-live="polite" data-live></span></div>`,
+<div class="pc-controls"><button type="button" class="pc-btn" data-prev aria-label="Put the last part back" disabled>←</button><span class="pc-dots" aria-hidden="true">${STAGGER.map(() => "<i data-dot></i>").join("")}</span><button type="button" class="pc-btn pc-sharpen" data-sharpen aria-keyshortcuts="S"><span>Sharpen</span></button><button type="button" class="pc-btn pc-next" data-next><span>${STEPS[0].next}</span> →</button>${EXPAND_BUTTON}<span class="pc-live" aria-live="polite" data-live></span></div>`,
 });
 
 const ARTICLE_CSS = `
@@ -597,12 +598,12 @@ const ARTICLE_CSS = `
 .pc-parts h2{font:13px ui-monospace,Menlo,monospace;text-transform:uppercase;letter-spacing:.08em;color:var(--anatomy-muted);margin:40px 0 4px}
 .pc-parts .tip{font:12px ui-monospace,Menlo,monospace;color:var(--anatomy-muted);margin:0 0 12px}
 `;
-const body = `<style>${ARTICLE_CSS}</style>
+const body = `<style>${ARTICLE_CSS}${EXPAND_CSS}</style>
 <nav class="pc-nav"><a href="../">← anatomy/of</a></nav>
 <header class="pc-head"><h1>Anatomy of a pencil</h1><p>A wooden pencil looks like one thing. It's five, each solving a problem the others can't.</p></header>
 ${plateBody}
 <section class="pc-parts"><h2>The parts</h2><p class="tip">Point at a part to find it in the figure; click it to take the pencil apart down to it.</p><ol>${PARTS.map(({ id, title, text }, index) => `<li data-select="${id}" tabindex="0" role="button" aria-label="${title}: show it in the figure"><span class="num">${String(index + 1).padStart(2, "0")}</span><h3>${title}</h3><p>${text}</p></li>`).join("")}</ol></section>`;
 
 const name = theme === "light" ? "index.html" : "dark.html";
-writeFileSync(join(HERE, name), k.pageHtml({ title: "Anatomy of a pencil", theme, body, script: kitScript() + live }));
+writeFileSync(join(HERE, name), k.pageHtml({ title: "Anatomy of a pencil", theme, body, script: kitScript() + live + EXPAND_JS }));
 console.log("wrote", name);
