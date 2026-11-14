@@ -22,5 +22,13 @@
     "summary": "Take it apart layer by layer: a rubber tube, two steel braids and a cover, crimped into a fitting. Pump it to 27.5 MPa.",
     "parts": 6,
     "thumb": "hydraulic-hose/thumb.svg"
+  },
+  {
+    "slug": "fried-rice",
+    "title": "Chinese fried rice",
+    "kind": "recipe",
+    "summary": "Light the burner and cook it step by step: egg into hot oil, day-old rice, soy and scallion, then toss over the flame.",
+    "parts": 5,
+    "thumb": "fried-rice/thumb.svg"
   }
 ]
