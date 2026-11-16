@@ -664,6 +664,7 @@ const ARTICLE_CSS = `${THREAD_CSS}
 @media (max-width:600px){.pc-controls{margin-top:8px;padding:0 4px 4px}.pc-context{margin-left:0}.iso-plate{padding-bottom:72px}}
 .pc-nav{max-width:650px;margin:0 auto;padding:24px 16px 0;font:14px/1.4 ui-monospace,Menlo,monospace}
 .pc-nav a{color:var(--anatomy-muted);text-decoration:none}.pc-nav a:hover{color:var(--anatomy-text)}
+.pc-nav{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.pc-versions{color:var(--anatomy-muted)}.pc-versions a[aria-current]{color:var(--anatomy-strong);text-decoration:underline;text-underline-offset:3px}
 .pc-head,.pc-parts{max-width:650px;margin:0 auto;padding:0 16px;color:var(--anatomy-text);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
 .pc-head h1{font:600 34px/1.15 Georgia,serif;margin:28px 0 8px;color:var(--anatomy-strong)}
 .pc-head p{margin:0 0 8px;color:var(--anatomy-muted)}
@@ -685,7 +686,7 @@ const ARTICLE_CSS = `${THREAD_CSS}
 `;
 const odds = `<h2>The odds now</h2><p class="tip">Change the temperature with − and + (or [ and ]), or the sentence with C, and watch the spread.</p><ol class="pc-odds">${CTX.cands.map((w, i) => `<li data-bar="${i}" style="--p:${probs0[i].toFixed(4)}"><span>${w}</span><i></i><b>${Math.round(probs0[i] * 100)}%</b></li>`).join("")}</ol>`;
 const body = `<style>${CONTRAST_CSS}${ARTICLE_CSS}${EXPAND_CSS}</style>
-<nav class="pc-nav"><a href="../">← anatomy/of</a></nav>
+<nav class="pc-nav"><a href="../">← anatomy/of</a><span class="pc-versions">version <a href="../language-model/" aria-current="page">tower</a> · <a href="../language-model-bench/">bench</a></span></nav>
 <header class="pc-head"><h1>Anatomy of a language model</h1><p>It doesn't plan a sentence. It picks one next word, from odds it works out fresh each time, and then does it again.</p></header>
 ${plateBody}
 <section class="pc-parts"><h2>The parts</h2><p class="tip">Point at a part to find it in the figure; click it to step the machine to it.</p><ol>${PARTS.map(({ id, title, text }, index) => `<li><div class="pc-part" data-select="${id}" tabindex="0" role="button" aria-label="${title}: show it in the figure"><span class="num">${String(index + 1).padStart(2, "0")}</span><h3>${title}</h3><p>${text}</p></div></li>`).join("")}</ol>${odds}</section>`;
