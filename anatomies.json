@@ -8,12 +8,12 @@
     "thumb": "pencil/thumb.svg"
   },
   {
-    "slug": "language-model",
+    "slug": "language-model-bench",
     "title": "a language model",
     "kind": "idea",
-    "summary": "One tall machine: each word drops a column through the layers, attention threads tie them together, and the odds pick the next word.",
+    "summary": "A next-word bench: a read head takes in the sentence, the layers light up one after another, pistons lift the candidates to their odds, and a pin draws the next word.",
     "parts": 6,
-    "thumb": "language-model/thumb.svg"
+    "thumb": "language-model-bench/thumb.svg"
   },
   {
     "slug": "hydraulic-hose",
