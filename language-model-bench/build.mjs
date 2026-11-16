@@ -15,9 +15,15 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const theme = process.argv.includes("--dark") ? "dark" : "light";
 
 // ---------- the model (toy numbers, true arithmetic) ----------
-const CONTEXT = ["the", "cat", "sat", "on", "the"];
-const WORDS = ["mat", "floor", "sofa", "bed", "roof", "moon"];
-const LOGITS = [3.0, 2.2, 1.6, 1.3, 0.4, -1.0];
+// Three example sentences: the context, six candidates and their scores (shared with the other versions).
+const CONTEXTS = [
+  { words: ["the", "cat", "sat", "on", "the"], cands: ["mat", "floor", "sofa", "bed", "roof", "moon"], logits: [3.0, 2.2, 1.6, 1.3, 0.4, -1.0] },
+  { words: ["the", "ship", "sailed", "on", "the"], cands: ["sea", "ocean", "river", "waves", "lake", "road"], logits: [3.2, 2.6, 1.4, 1.2, 0.8, -1.2] },
+  { words: ["the", "bird", "flew", "over", "the"], cands: ["trees", "house", "city", "river", "clouds", "moon"], logits: [2.4, 2.2, 2.0, 1.6, 1.4, 0.2] },
+];
+const CONTEXT = CONTEXTS[0].words;
+const WORDS = CONTEXTS[0].cands;
+const LOGITS = CONTEXTS[0].logits;
 const TEMPS = [0.25, 0.5, 1, 1.5, 2];
 const T0 = 2; // index into TEMPS: T = 1
 const LAYERS = 6;
@@ -140,7 +146,8 @@ function stack() {
   for (let i = 0; i < LAYERS; i++) {
     const z = STACK_BASE + 3.5 + i * LAYER_PITCH;
     const plan = k.insetPlan(base, 2);
-    const lamps = [0, 1, 2, 3, 4, 5].map((j) => at([plan.x + plan.w - 0.01, plan.y + 9 + j * 6.5, z + LAYER_H / 2]));
+    // one lamp per context token, on the plate's right edge: every token passes through every layer
+    const lamps = [0, 1, 2, 3, 4].map((j) => at([plan.x + plan.w - 0.01, plan.y + 10 + j * 7.5, z + LAYER_H / 2]));
     out.push(`<g data-layer="${i}">${S(k.slabOf(plan, z, LAYER_H, P, 6, 0.5), { tone: "hi" })}${Dt(lamps, { size: 0.65, tone: "lo" })}</g>`);
     // spacer collars on the posts between plates
     if (i < LAYERS - 1) for (const [x, y] of rest.slice(0, 2)) out.push(S(k.cylinder(x, y, 2.4, z + LAYER_H, LAYER_PITCH - LAYER_H, P, 16), { tone: "mid" }));
@@ -208,11 +215,11 @@ const pistonSvg = (cx, rise) => {
 };
 
 // a word tile, drawn at a given centre and base height
-function tileSvg(cx, cy, z, word, size) {
+function tileSvg(cx, cy, z, word, size, key) {
   const plan = box(cx, cy, size.w, size.d, 1.2);
   const top = z + size.h;
   const inner = L(k.planOutline(k.insetPlan(plan, 1.3), top, P, 3), { tone: "faint" });
-  const text = k.faceTextSvg(k.topMatrix([cx, cy + 1.3], top, P, "x"), word, { size: word.length > 4 ? 3.4 : 3.9, tone: "hi", anchor: "middle" });
+  const text = k.faceTextSvg(k.topMatrix([cx, cy + 1.3], top, P, "x"), word, { size: word.length > 4 ? 3.4 : 3.9, tone: "hi", anchor: "middle" }).replace("<text ", `<text data-word="${key}" `);
   return S(k.slabOf(plan, z, size.h, P, 3, 0.6), { tone: "hi", inner: inner + text });
 }
 
@@ -237,7 +244,7 @@ function tape() {
 // segment dividers: thin fences standing on the tape, one at each running total (drawn at x = 0)
 const dividerSvg = () => S(k.slabOf({ x: -0.5, y: TAPE.y + 0.4, w: 1, d: TAPE.d - 0.8, r: 0.2 }, TAPE_Z, 3.2, P, 1), { tone: "mid", crease: "none" });
 // the segment's word, engraved on the tape between dividers (drawn at x = 0)
-const segText = (word) => k.faceTextSvg(k.topMatrix([0, TAPE.y + 8.6], TAPE_Z, P, "x"), word, { size: 3.4, tone: "hi", anchor: "middle" });
+const segText = (word, i) => k.faceTextSvg(k.topMatrix([0, TAPE.y + 8.6], TAPE_Z, P, "x"), word, { size: 3.4, tone: "hi", anchor: "middle" }).replace("<text ", `<text data-word="seg-${i}" `);
 
 function carriage() {
   const x = TAPE.x;
@@ -331,11 +338,11 @@ const BODY = [
   part("scores", panel() + rackBase()),
   part("layers", bus()),
   ...columns.map((i) =>
-    part("scores", sleeve(i) + `<g data-piston="${i}">${pistonSvg(colX(i), probs0[i] * RISE)}</g>` + `<g data-home="${i}"><g data-tile="${i}">${tileSvg(colX(i), COL_Y, SLEEVE.h, WORDS[i], CAND)}</g></g>`),
+    part("scores", sleeve(i) + `<g data-piston="${i}">${pistonSvg(colX(i), probs0[i] * RISE)}</g>` + `<g data-home="${i}"><g data-tile="${i}">${tileSvg(colX(i), COL_Y, SLEEVE.h, WORDS[i], CAND, `cand-${i}`)}</g></g>`),
   ),
-  part("sampler", tape() + `<g data-segs>${WORDS.map((w, i) => `<g data-seg="${i}">${segText(w)}</g>`).join("")}</g>` + `<g data-dividers>${WORDS.slice(0, -1).map((_, i) => `<g data-divider="${i}">${dividerSvg()}</g>`).join("")}</g>` + `<g data-carriage>${carriage()}</g>`),
+  part("sampler", tape() + `<g data-segs>${WORDS.map((w, i) => `<g data-seg="${i}">${segText(w, i)}</g>`).join("")}</g>` + `<g data-dividers>${WORDS.slice(0, -1).map((_, i) => `<g data-divider="${i}">${dividerSvg()}</g>`).join("")}</g>` + `<g data-carriage>${carriage()}</g>`),
   part("layers", readRail()),
-  part("context", rail() + CONTEXT.map((w, i) => `<g data-ctx="${i}">${tileSvg(slotX(i), TILE_Y, RAIL_H, w, TILE)}</g>`).join("")),
+  part("context", rail() + CONTEXT.map((w, i) => `<g data-ctx="${i}">${tileSvg(slotX(i), TILE_Y, RAIL_H, w, TILE, `ctx-${i}`)}</g>`).join("")),
   part("layers", `<g data-head>${head()}</g>`),
   part("temperature", knob()),
   `<g data-fly></g>`,
@@ -347,16 +354,17 @@ if (theme === "light") writeFileSync(join(HERE, "thumb.svg"), xmlSafe(k.figureSv
 
 // ---------- steps and parts ----------
 const STEPS = [
-  { say: `context · ${CONTEXT.length} tokens`, next: "Read the context" },
-  { say: `reading · ${LAYERS} layers, every token`, next: "Score every word" },
-  { say: "scores · one per candidate", next: "Turn scores into odds" },
-  { say: "softmax · odds add to 100%", next: "Draw at random" },
-  { say: "draw", next: "Append the word" },
-  { say: "appended", next: "Start over" },
+  { say: `context · ${CONTEXT.length} tokens`, next: "Read" },
+  { say: `reading · ${LAYERS} layers, bottom to top`, next: "Score" },
+  { say: "scores · one per candidate", next: "Odds" },
+  { say: "softmax · odds add to 100%", next: "Draw" },
+  { say: "draw", next: "Append" },
+  { say: "appended", next: "Again" },
 ];
 const PARTS = [
-  { id: "context", step: 0, title: "Context", fact: `context · “${CONTEXT.join(" ")}”`, text: "Everything written so far. A real model cuts text into tokens, which are often whole words and sometimes pieces of words, and it sees every one of them at each step." },
-  { id: "layers", step: 1, title: "Layers", fact: `layers · ${LAYERS} here, often dozens in practice`, text: "A stack of identical layers. In each one, every token looks back at the tokens before it (attention) and updates what it means in context. What leaves the top is a summary of the whole context, ready for scoring." },
+  { id: "context", step: 0, title: "Context", fact: "context · the words so far, as tokens", text: "Everything written so far. A real model cuts text into tokens, which are often whole words and sometimes pieces of words, and it sees every one of them at each step. Change the sentence with C (or the Sentence button) to see other examples." },
+  { id: "layers", step: 1, title: "Layers", fact: `layers · ${LAYERS} here, often dozens in practice`, text: "A stack of identical layers. When the machine reads, the head first takes in each token, then the plates light up one after another from the bottom: each layer works on what the layer below it handed up, so the work happens in order. The five lamps on each plate are the five tokens; all of them pass through every layer. What leaves the top is a summary of the whole context, ready for scoring." },
+  { id: "attention", on: "layers", step: 1, title: "Attention, inside each layer", fact: "attention · each token looks back, never ahead", text: "Inside every layer, each token takes in information from the tokens before it, more from some than others: in “the cat sat on the”, the last “the” leans on “on” and “cat”. That is how a word comes to mean that word in this sentence. A token never looks ahead at what comes after it, which is why the model writes left to right." },
   { id: "scores", step: 2, title: "Scores", fact: "scores · one per word in the vocabulary", text: "The model gives a score (a logit) to every token it knows, tens of thousands of them. Here only six are shown. A score is not a probability yet: it can be any number, even negative." },
   { id: "temperature", step: 3, title: "Temperature", fact: "temperature · divides every score before softmax", text: "Softmax turns scores into odds that add up to 100%. Before that, every score is divided by the temperature. Below 1 the odds sharpen towards the top word, and above 1 they flatten towards an even spread." },
   { id: "sampler", step: 4, title: "Sampler", fact: "sampler · a random point on the odds", text: "The odds are laid end to end along a tape, so each word gets a length equal to its chance. A random number between 0 and 1 picks a point on the tape, and the word under it is the one written next. Likely words win most draws but not all of them." },
@@ -369,9 +377,9 @@ const unit = (vector) => {
 };
 const DATA = {
   EX: unit([1, 0, 0]), EY: unit([0, 1, 0]), EZ: unit([0, 0, 1]),
-  P, words: WORDS, logits: LOGITS, temps: TEMPS, t0: T0, context: CONTEXT,
+  P, contexts: CONTEXTS, temps: TEMPS, t0: T0, layers: LAYERS,
   steps: STEPS,
-  parts: Object.fromEntries(PARTS.map(({ id, step, fact }) => [id, { step, fact }])),
+  parts: Object.fromEntries(PARTS.map(({ id, on, step, fact }) => [id, { step, fact, on: on || id }])),
   colX: WORDS.map((_, i) => colX(i)), colY: COL_Y, sleeveH: SLEEVE.h, piston: PISTON, rise: RISE,
   logitFloor: LOGIT_FLOOR, logitScale: LOGIT_SCALE,
   tape: TAPE, slot: [slotX(5), TILE_Y, RAIL_H], slots: [0, 1, 2, 3, 4].map(slotX), candZ: SLEEVE.h,
@@ -394,7 +402,10 @@ const warmer = document.querySelector("[data-warmer]");
 const drawButton = document.querySelector("[data-draw]");
 const bars = [...document.querySelectorAll("[data-bar]")];
 const still = matchMedia("(prefers-reduced-motion: reduce)");
-const N = D.words.length;
+const N = 6;
+let ctx = 0, C = D.contexts[0];
+const contextButton = document.querySelector("[data-context]");
+const word = (key) => stage.querySelector('[data-word="' + key + '"]');
 const pistons = [...stage.querySelectorAll("[data-piston]")].sort((a, b) => a.dataset.piston - b.dataset.piston);
 const tiles = [...stage.querySelectorAll("[data-tile]")].sort((a, b) => a.dataset.tile - b.dataset.tile);
 const homes = [...stage.querySelectorAll("[data-home]")].sort((a, b) => a.dataset.home - b.dataset.home);
@@ -410,7 +421,7 @@ const fly = stage.querySelector("[data-fly]");
 const layers = [...stage.querySelectorAll("[data-layer]")];
 const groups = [...stage.querySelectorAll("[data-part]")];
 
-const softmax = (t) => { const top = Math.max(...D.logits); const e = D.logits.map((z) => Math.exp((z - top) / t)); const s = e.reduce((a, b) => a + b, 0); return e.map((x) => x / s); };
+const softmax = (t) => { const top = Math.max(...C.logits); const e = C.logits.map((z) => Math.exp((z - top) / t)); const s = e.reduce((a, b) => a + b, 0); return e.map((x) => x / s); };
 const pct = (p) => (p >= 0.995 ? "99" : p < 0.005 ? "<1" : Math.round(p * 100)) + "%";
 const tText = (t) => "T " + (t < 1 ? t.toFixed(2).replace(/0$/, "") : t.toFixed(1));
 const ease = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
@@ -421,9 +432,12 @@ let temp = D.t0, probs = softmax(D.temps[temp]);
 let step = 0, selected = null, u = 0.5, winner = 0;
 let touring = !still.matches, tourClock = 0, idleTimer = 0, visible = false, frame = 0, last = 0, clock = 0;
 // eased quantities
-const h = D.words.map(() => 0); // piston rise
-const cut = D.words.map(() => 0); // divider positions (running totals)
-let pin = 0, flight = 0, readAt = 0, segShow = 0;
+const h = Array(N).fill(0); // piston rise
+const cut = Array(N).fill(0); // divider positions (running totals)
+let pin = 0, flight = 0, readAt = 0, segShow = 0, readClock = 0;
+// one pass of reading: the head sweeps the tiles, then the layers light bottom to top
+const SWEEP = 0.9, LAYER_T = 0.22, PASS = SWEEP + D.layers * LAYER_T + 0.5;
+const wave = () => (step === 1 ? (readClock % PASS) - SWEEP : -1) / LAYER_T; // < 0 while sweeping, then the layer index
 const pinPos = (n) => (step >= 4 ? u : 0);
 
 function cumulative() { const c = []; let s = 0; for (let i = 0; i < N - 1; i++) { s += probs[i]; c.push(s); } return c; }
@@ -431,7 +445,7 @@ function pick(r) { let s = 0; for (let i = 0; i < N; i++) { s += probs[i]; if (r
 
 function goals() {
   const g = {};
-  g.h = D.words.map((_, i) => (step < 2 ? 0 : step === 2 ? (D.logits[i] - D.logitFloor) * D.logitScale : probs[i] * D.rise));
+  g.h = C.logits.map((z, i) => (step < 2 ? 0 : step === 2 ? (z - D.logitFloor) * D.logitScale : probs[i] * D.rise));
   g.cut = cumulative();
   g.seg = step >= 3 ? 1 : 0;
   g.pin = step >= 4 ? u : 0;
@@ -440,12 +454,14 @@ function goals() {
 }
 
 function announce(text) { if (liveText.textContent !== text) liveText.textContent = text; }
-const sentence = () => D.context.join(" ") + " " + D.words[winner];
-const topList = () => D.words.map((w, i) => [w, probs[i]]).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([w, p]) => w + " " + pct(p)).join(" · ");
+const sentence = () => C.words.join(" ") + " " + C.cands[winner];
+const topList = () => C.cands.map((w, i) => [w, probs[i]]).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([w, p]) => w + " " + pct(p)).join(" · ");
 function stepText(n) {
-  if (n === 2) return "scores · " + D.words.slice(0, 3).map((w, i) => w + " " + D.logits[i].toFixed(1)).join(" · ");
+  if (n === 0) return "“" + C.words.join(" ") + " …” · " + C.words.length + " tokens";
+  if (n === 1) { const w = Math.floor(wave()); return w < 0 ? "reading · head takes in tokens" : w < D.layers ? "layer " + (w + 1) + " of " + D.layers + " · tokens look back" : "reading · summary to scoring"; }
+  if (n === 2) return "scores · " + C.cands.slice(0, 3).map((w, i) => w + " " + C.logits[i].toFixed(1)).join(" · ");
   if (n === 3) return tText(D.temps[temp]) + " · " + topList();
-  if (n === 4) return "draw · " + u.toFixed(2) + " → " + D.words[winner];
+  if (n === 4) return "draw · " + u.toFixed(2) + " → " + C.cands[winner];
   if (n === 5) return "“" + sentence() + "”";
   return D.steps[n].say;
 }
@@ -455,6 +471,7 @@ function setStep(n) {
   if (n === step) return;
   if (n >= 4 && step < 4) { u = Math.random(); winner = pick(u); }
   if (n < 5) markWinner(false);
+  if (n === 1) readClock = 0;
   step = n;
   controls();
   if (!touring) announce(stepText(step));
@@ -478,6 +495,23 @@ function setTemp(n) {
   run();
 }
 
+function setContext(n, auto) {
+  if (!auto) { hold(); select(null); }
+  ctx = (n + D.contexts.length) % D.contexts.length;
+  C = D.contexts[ctx];
+  probs = softmax(D.temps[temp]);
+  const fit = (el, w, long) => { el.textContent = w; el.setAttribute("font-size", w.length > long ? 3.4 : 3.9); };
+  C.words.forEach((w, i) => fit(word("ctx-" + i), w, 4));
+  C.cands.forEach((w, i) => { fit(word("cand-" + i), w, 4); word("seg-" + i).textContent = w; });
+  markWinner(false);
+  flight = 0;
+  step = -1;
+  setStep(0);
+  if (!auto) setTimeout(() => { if (!touring && step === 0) setStep(1); }, 350);
+  controls();
+  announce("new sentence · “" + C.words.join(" ") + " …”");
+}
+
 function draw() {
   hold();
   select(null);
@@ -492,7 +526,7 @@ let drawTimer = 0;
 function select(id) {
   if (selected === id) return;
   selected = id;
-  for (const g of groups) { if (id && g.dataset.part === id) g.setAttribute("data-on", ""); else g.removeAttribute("data-on"); }
+  for (const g of groups) { if (id && g.dataset.part === D.parts[id].on) g.setAttribute("data-on", ""); else g.removeAttribute("data-on"); }
   if (id) stage.setAttribute("data-focus", ""); else stage.removeAttribute("data-focus");
   for (const item of items) { if (item.dataset.select === id) item.setAttribute("data-on", ""); else item.removeAttribute("data-on"); }
   if (id) announce(D.parts[id].fact);
@@ -500,7 +534,7 @@ function select(id) {
 }
 
 function controls() {
-  prev.disabled = step === 0;
+  prev.disabled = step <= 0;
   next.querySelector("span").textContent = D.steps[step].next;
   next.setAttribute("aria-label", D.steps[step].next);
   dots.forEach((dot, index) => (index < step ? dot.setAttribute("data-on", "") : dot.removeAttribute("data-on")));
@@ -509,7 +543,7 @@ function controls() {
   cooler.disabled = temp === 0;
   warmer.disabled = temp === D.temps.length - 1;
   document.querySelector("[data-temp]").textContent = tText(D.temps[temp]);
-  bars.forEach((bar) => { const i = Number(bar.dataset.bar); bar.style.setProperty("--p", probs[i].toFixed(4)); bar.querySelector("b").textContent = pct(probs[i]); });
+  bars.forEach((bar) => { const i = Number(bar.dataset.bar); bar.style.setProperty("--p", probs[i].toFixed(4)); bar.querySelector("span").textContent = C.cands[i]; bar.querySelector("b").textContent = pct(probs[i]); });
 }
 
 // exponential follow: calm, frame-rate independent
@@ -525,7 +559,7 @@ function update(dt, calm) {
   pin = go(pin, g.pin, 3.2);
   // the tile leaves only once the pin has settled
   flight = go(flight, step >= 5 ? (Math.abs(pin - g.pin) < 0.01 ? 1 : 0) : 0, 3.5);
-  if (step === 1 && !calm) { readAt = (readAt + dt * 3.2) % 5; busy = true; } else readAt = go(readAt, 0, 6);
+  if (step === 1 && !calm) { readClock += dt; const t = readClock % PASS; readAt = Math.min(4, (t / SWEEP) * 4); busy = true; } else readAt = go(readAt, 0, 6);
   if (drawTimer > 0) { drawTimer -= dt; if (drawTimer <= 0 && step === 4) setStep(5); busy = true; }
   return busy || step === 1;
 }
@@ -566,14 +600,20 @@ function place() {
   for (let i = 0; i < N; i++) {
     const a = i ? cut[i - 1] : 0, b = i < N - 1 ? cut[i] : 1;
     setT(segs[i], shift(D.tape.x + ((a + b) / 2) * D.tape.len, 0, 0));
-    segs[i].style.visibility = (b - a) * D.tape.len > D.words[i].length * 2.2 + 2 ? "visible" : "hidden";
+    segs[i].style.visibility = (b - a) * D.tape.len > C.cands[i].length * 2.2 + 2 ? "visible" : "hidden";
   }
   setT(carriage, shift(pin * D.tape.len, 0, 0));
   // the read head sweeps the tiles while reading
   const slot = Math.min(4, readAt);
   setT(head, shift(slot * (D.slots[1] - D.slots[0]), 0, 0));
-  const lit = step === 1 ? Math.floor(clock * 6) % layers.length : -1;
-  layers.forEach((layer, i) => layer.querySelector(".iso-dots").setAttribute("data-tone", step === 1 && i <= lit ? "hi" : "lo"));
+  // the layer the reading has reached is lit; the ones below it are done
+  const w = Math.floor(wave());
+  layers.forEach((layer, i) => {
+    const on = step === 1 && i === w;
+    const solid = layer.querySelector(".iso-solid");
+    if (!!solid._on !== on) { solid._on = on; on ? solid.setAttribute("data-lit", "") : solid.removeAttribute("data-lit"); }
+    layer.querySelector(".iso-dots").setAttribute("data-tone", on ? "hi" : step === 1 && i < w ? "mid" : "lo");
+  });
   const text = selected ? D.parts[selected].fact : stepText(step);
   if (readout.textContent !== text) readout.textContent = text;
 }
@@ -587,7 +627,8 @@ function tick(now) {
   if (touring) {
     tourClock += dt;
     const beat = Math.floor(tourClock / TOUR) % (LAST + 1);
-    if (beat !== step) setStep(beat);
+    if (beat === 0 && step === LAST) setContext(ctx + 1, true);
+    else if (beat !== step) setStep(beat);
   }
   const busy = update(dt, still.matches);
   place();
@@ -601,7 +642,7 @@ function hold() {
   idleTimer = setTimeout(() => {
     if (still.matches || selected || stage.matches(":hover, :focus-within")) return hold();
     touring = true;
-    tourClock = step * TOUR;
+    tourClock = Math.max(0, step) * TOUR;
     run();
   }, 9000);
 }
@@ -626,7 +667,7 @@ stage.addEventListener("click", (event) => {
 });
 
 stage.addEventListener("keydown", (event) => {
-  const keys = { ArrowRight: () => go(step + 1), ArrowDown: () => go(step + 1), ArrowLeft: () => go(step - 1), ArrowUp: () => go(step - 1), Home: () => go(0), End: () => go(LAST), " ": forward, Enter: forward, Escape: () => { hold(); select(null); go(0); }, d: draw, D: draw, "[": () => { hold(); setTemp(temp - 1); }, "]": () => { hold(); setTemp(temp + 1); }, "-": () => { hold(); setTemp(temp - 1); }, "=": () => { hold(); setTemp(temp + 1); }, "+": () => { hold(); setTemp(temp + 1); } };
+  const keys = { ArrowRight: () => go(step + 1), ArrowDown: () => go(step + 1), ArrowLeft: () => go(step - 1), ArrowUp: () => go(step - 1), Home: () => go(0), End: () => go(LAST), " ": forward, Enter: forward, Escape: () => { hold(); select(null); go(0); }, d: draw, D: draw, c: () => setContext(ctx + 1), C: () => setContext(ctx + 1), "[": () => { hold(); setTemp(temp - 1); }, "]": () => { hold(); setTemp(temp + 1); }, "-": () => { hold(); setTemp(temp - 1); }, "=": () => { hold(); setTemp(temp + 1); }, "+": () => { hold(); setTemp(temp + 1); } };
   if (!keys[event.key]) return;
   event.preventDefault();
   keys[event.key]();
@@ -634,6 +675,7 @@ stage.addEventListener("keydown", (event) => {
 prev.addEventListener("click", () => go(step - 1));
 next.addEventListener("click", forward);
 drawButton.addEventListener("click", draw);
+contextButton.addEventListener("click", () => setContext(ctx + 1));
 cooler.addEventListener("click", () => { hold(); setTemp(temp - 1); });
 warmer.addEventListener("click", () => { hold(); setTemp(temp + 1); });
 
@@ -655,15 +697,15 @@ place();
 const plateBody = k.plateHtml({
   fig: "Fig 2 · v1",
   title: "Language model · next word",
-  hint: "← → step · D draw · [ ] temperature · F expand",
+  hint: "← → step · D draw · C sentence",
   readout: STEPS[0].say,
   keys: [
     { mark: "lit", label: "The pin: a random number, the only part that chooses" },
     { mark: "raised", label: "Rail, layers, pistons and tape: everything that sets the odds" },
   ],
-  caption: `A language model writes one token at a time. It reads the whole context (“${CONTEXT.join(" ")}”) through a stack of layers and gives every word it knows a score. Softmax turns the scores into odds that add up to 100%, after dividing each score by the temperature. Then it draws: the odds are laid end to end along a tape, a random number picks a point, and the word under that point is appended to the context. The loop repeats for the next token. The scores here are toy numbers; the arithmetic is real.`,
-  body: `<div class="iso-stage" tabindex="0" role="slider" aria-label="Language model. Arrow keys step through how it picks the next word; D draws a word; [ and ] change the temperature; hover or tap a part to read about it." aria-valuemin="0" aria-valuemax="${STEPS.length - 1}" aria-valuenow="0" aria-valuetext="${STEPS[0].say}">${svg}</div>
-<div class="pc-controls"><button type="button" class="pc-btn" data-prev aria-label="Back one step" disabled>←</button><span class="pc-dots" aria-hidden="true">${STEPS.slice(1).map(() => "<i data-dot></i>").join("")}</span><span class="pc-temp"><button type="button" class="pc-btn" data-cooler aria-label="Lower the temperature" aria-keyshortcuts="[">−</button><span data-temp>T 1.0</span><button type="button" class="pc-btn" data-warmer aria-label="Raise the temperature" aria-keyshortcuts="]">+</button></span><button type="button" class="pc-btn" data-draw aria-keyshortcuts="D">Draw</button><button type="button" class="pc-btn pc-next" data-next><span>${STEPS[0].next}</span> →</button>${EXPAND_BUTTON}<span class="pc-live" aria-live="polite" data-live></span></div>`,
+  caption: `A language model writes one token at a time. It reads the whole context through a stack of layers, one layer after another, and gives every word it knows a score. Softmax turns the scores into odds that add up to 100%, after dividing each score by the temperature. Then it draws: the odds are laid end to end along a tape, a random number picks a point, and the word under that point is appended to the context. The loop repeats for the next token. The scores here are toy numbers; the arithmetic is real.`,
+  body: `<div class="iso-stage" tabindex="0" role="slider" aria-label="Language model. Arrow keys step through how it picks the next word; D draws a word; C changes the sentence; [ and ] change the temperature; hover or tap a part to read about it." aria-valuemin="0" aria-valuemax="${STEPS.length - 1}" aria-valuenow="0" aria-valuetext="${STEPS[0].say}">${svg}</div>
+<div class="pc-controls"><button type="button" class="pc-btn" data-prev aria-label="Back one step" disabled>←</button><span class="pc-dots" aria-hidden="true">${STEPS.slice(1).map(() => "<i data-dot></i>").join("")}</span><button type="button" class="pc-btn pc-context" data-context aria-keyshortcuts="C">Sentence ↻</button><span class="pc-temp"><button type="button" class="pc-btn" data-cooler aria-label="Lower the temperature" aria-keyshortcuts="[">−</button><span data-temp>T 1.0</span><button type="button" class="pc-btn" data-warmer aria-label="Raise the temperature" aria-keyshortcuts="]">+</button></span><button type="button" class="pc-btn" data-draw aria-keyshortcuts="D">Draw</button><button type="button" class="pc-btn pc-next" data-next><span>${STEPS[0].next}</span> →</button>${EXPAND_BUTTON}<span class="pc-live" aria-live="polite" data-live></span></div>`,
 });
 
 const ARTICLE_CSS = `
@@ -679,7 +721,9 @@ const ARTICLE_CSS = `
 .pc-btn{font:inherit;color:var(--anatomy-strong);background:var(--anatomy-card);border:1px solid var(--anatomy-mid);padding:7px 10px;cursor:pointer;min-height:30px}
 .pc-btn:hover{border-color:var(--anatomy-strong)}
 .pc-btn:disabled{color:var(--anatomy-lo);border-color:var(--anatomy-faint);cursor:default}
-.pc-temp{display:inline-flex;align-items:center;gap:6px;margin-left:auto;color:var(--anatomy-text);font-variant-numeric:tabular-nums}
+.pc-context{margin-left:auto}
+[data-layer]>.iso-solid[data-lit]>.iso-shade{fill:var(--anatomy-hi)}
+.pc-temp{display:inline-flex;align-items:center;gap:6px;color:var(--anatomy-text);font-variant-numeric:tabular-nums}
 .pc-temp [data-temp]{min-width:44px;text-align:center}
 .pc-temp .pc-btn{padding:7px 9px}
 .pc-dots{display:flex;gap:5px}
@@ -687,7 +731,7 @@ const ARTICLE_CSS = `
 .pc-dots i[data-on]{background:var(--anatomy-strong);border-color:var(--anatomy-strong)}
 .pc-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .iso-plate{padding-bottom:60px}
-@media (max-width:600px){.pc-controls{margin-top:8px;padding:0 4px 4px}.pc-temp{margin-left:0}.iso-plate{padding-bottom:72px}}
+@media (max-width:600px){.pc-controls{margin-top:8px;padding:0 4px 4px}.pc-context{margin-left:0}.iso-plate{padding-bottom:72px}}
 @media (min-width:700px) and (min-height:860px){.iso-figure{position:sticky;top:0;z-index:2;background:var(--anatomy-page);padding:16px 0 14px;margin-top:-16px;box-shadow:0 1px 0 color-mix(in srgb,var(--anatomy-muted) 30%,transparent)}}
 .pc-nav{max-width:650px;margin:0 auto;padding:24px 16px 0;font:14px/1.4 ui-monospace,Menlo,monospace}
 .pc-nav a{color:var(--anatomy-muted);text-decoration:none}.pc-nav a:hover{color:var(--anatomy-text)}
@@ -711,7 +755,7 @@ const ARTICLE_CSS = `
 .pc-odds i::after{content:"";position:absolute;inset:0 auto 0 0;width:calc(var(--p) * 100%);background:var(--anatomy-hi);transition:width .4s var(--anatomy-ease)}
 .pc-odds b{font-weight:400;text-align:right;color:var(--anatomy-text);font-variant-numeric:tabular-nums}
 `;
-const odds = `<h2>The odds now</h2><p class="tip">Change the temperature with − and + (or [ and ]) and watch the spread.</p><ol class="pc-odds">${WORDS.map((w, i) => `<li data-bar="${i}" style="--p:${probs0[i].toFixed(4)}"><span>${w}</span><i></i><b>${Math.round(probs0[i] * 100)}%</b></li>`).join("")}</ol>`;
+const odds = `<h2>The odds now</h2><p class="tip">Change the temperature with − and + (or [ and ]), or the sentence with C, and watch the spread.</p><ol class="pc-odds">${WORDS.map((w, i) => `<li data-bar="${i}" style="--p:${probs0[i].toFixed(4)}"><span>${w}</span><i></i><b>${Math.round(probs0[i] * 100)}%</b></li>`).join("")}</ol>`;
 const body = `<style>${CONTRAST_CSS}${ARTICLE_CSS}${EXPAND_CSS}</style>
 <nav class="pc-nav"><a href="../">← anatomy/of</a><span class="pc-versions">version <a href="../language-model-computer/">computer</a> · <a href="../language-model/">tower</a> · <a href="../language-model-bench/" aria-current="page">bench</a></span></nav>
 <header class="pc-head"><h1>Anatomy of a language model</h1><p>It doesn't plan a sentence. It picks one next word, from odds it works out fresh each time, and then does it again.</p></header>
