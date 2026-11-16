@@ -11,8 +11,8 @@
     "slug": "language-model",
     "title": "a language model",
     "kind": "idea",
-    "summary": "Step through how it picks the next word: read the context, score every word, turn scores into odds, draw one at random.",
-    "parts": 5,
+    "summary": "One tall machine: each word drops a column through the layers, attention threads tie them together, and the odds pick the next word.",
+    "parts": 6,
     "thumb": "language-model/thumb.svg"
   },
   {
