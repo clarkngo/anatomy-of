@@ -713,7 +713,7 @@ const ARTICLE_CSS = `
 `;
 const odds = `<h2>The odds now</h2><p class="tip">Change the temperature with − and + (or [ and ]) and watch the spread.</p><ol class="pc-odds">${WORDS.map((w, i) => `<li data-bar="${i}" style="--p:${probs0[i].toFixed(4)}"><span>${w}</span><i></i><b>${Math.round(probs0[i] * 100)}%</b></li>`).join("")}</ol>`;
 const body = `<style>${CONTRAST_CSS}${ARTICLE_CSS}${EXPAND_CSS}</style>
-<nav class="pc-nav"><a href="../">← anatomy/of</a><span class="pc-versions">version <a href="../language-model/">tower</a> · <a href="../language-model-bench/" aria-current="page">bench</a></span></nav>
+<nav class="pc-nav"><a href="../">← anatomy/of</a><span class="pc-versions">version <a href="../language-model-computer/">computer</a> · <a href="../language-model/">tower</a> · <a href="../language-model-bench/" aria-current="page">bench</a></span></nav>
 <header class="pc-head"><h1>Anatomy of a language model</h1><p>It doesn't plan a sentence. It picks one next word, from odds it works out fresh each time, and then does it again.</p></header>
 ${plateBody}
 <section class="pc-parts"><h2>The parts</h2><p class="tip">Point at a part to find it in the figure; click it to step the machine to it.</p><ol>${PARTS.map(({ id, title, text }, index) => `<li><div class="pc-part" data-select="${id}" tabindex="0" role="button" aria-label="${title}: show it in the figure"><span class="num">${String(index + 1).padStart(2, "0")}</span><h3>${title}</h3><p>${text}</p></div></li>`).join("")}</ol>${odds}</section>`;
