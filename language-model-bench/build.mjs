@@ -18,12 +18,16 @@ const theme = process.argv.includes("--dark") ? "dark" : "light";
 // Three example sentences: the context, six candidates and their scores (shared with the other versions).
 const CONTEXTS = [
   { words: ["the", "cat", "sat", "on", "the"], cands: ["mat", "floor", "sofa", "bed", "roof", "moon"], logits: [3.0, 2.2, 1.6, 1.3, 0.4, -1.0],
-    attn: [[1], [0.35, 0.65], [0.1, 0.6, 0.3], [0.05, 0.2, 0.45, 0.3], [0.1, 0.3, 0.1, 0.35, 0.15]] },
+    attn: [[1], [0.35, 0.65], [0.1, 0.6, 0.3], [0.05, 0.2, 0.45, 0.3], [0.1, 0.3, 0.1, 0.35, 0.15]],
+    notes: ["“the” is a determiner: a noun comes next", "it closes the phrase “on the …”", "“on” here means on top of a surface", "the one doing the sitting is “cat”", "cats sit on mats, floors, sofas, beds", "ready to score: somewhere flat to sit"] },
   { words: ["the", "ship", "sailed", "on", "the"], cands: ["sea", "ocean", "river", "waves", "lake", "road"], logits: [3.2, 2.6, 1.4, 1.2, 0.8, -1.2],
-    attn: [[1], [0.35, 0.65], [0.1, 0.62, 0.28], [0.05, 0.25, 0.42, 0.28], [0.08, 0.38, 0.14, 0.3, 0.1]] },
+    attn: [[1], [0.35, 0.65], [0.1, 0.62, 0.28], [0.05, 0.25, 0.42, 0.28], [0.08, 0.38, 0.14, 0.3, 0.1]],
+    notes: ["“the” is a determiner: a noun comes next", "it closes the phrase “on the …”", "“on” after “sailed” means on water", "the one doing the sailing is “ship”", "ships sail on seas, oceans, rivers", "ready to score: a stretch of water"] },
   { words: ["the", "bird", "flew", "over", "the"], cands: ["trees", "house", "city", "river", "clouds", "moon"], logits: [2.4, 2.2, 2.0, 1.6, 1.4, 0.2],
-    attn: [[1], [0.35, 0.65], [0.1, 0.6, 0.3], [0.05, 0.22, 0.45, 0.28], [0.08, 0.34, 0.16, 0.3, 0.12]] },
+    attn: [[1], [0.35, 0.65], [0.1, 0.6, 0.3], [0.05, 0.22, 0.45, 0.28], [0.08, 0.34, 0.16, 0.3, 0.12]],
+    notes: ["“the” is a determiner: a noun comes next", "it closes the phrase “over the …”", "“over” here means passing above", "the one doing the flying is “bird”", "birds fly over trees, houses, cities", "ready to score: something below the sky"] },
 ];
+// notes say what each layer adds to the last token: illustrative, not read out of a real model
 // attention rows are toy weights: row i is token i looking back at tokens 0..i, and each row adds to 1
 const TOPKS = [6, 3, 1]; // the top-k gate: all six, the best three, only the best
 const CONTEXT = CONTEXTS[0].words;
@@ -160,7 +164,9 @@ function stack() {
     const plan = k.insetPlan(base, 2);
     // one lamp per context token, on the plate's right edge: every token passes through every layer
     const lamps = [0, 1, 2, 3, 4].map((j) => at([plan.x + plan.w - 0.01, plan.y + 10 + j * 7.5, z + LAYER_H / 2]));
-    out.push(`<g data-layer="${i}">${S(k.slabOf(plan, z, LAYER_H, P, 6, 0.5), { tone: "hi" })}${Dt(lamps, { size: 0.65, tone: "lo" })}</g>`);
+    // two phase lamps on the front face: look (attention), then think (feed-forward)
+    const phase = (dx) => Dt([at([plan.x + dx, plan.y + plan.d + 0.01, z + LAYER_H / 2])], { size: 0.9, tone: "lo" });
+    out.push(`<g data-layer="${i}">${S(k.slabOf(plan, z, LAYER_H, P, 6, 0.5), { tone: "hi" })}${Dt(lamps, { size: 0.65, tone: "lo" })}<g data-look>${phase(16)}</g><g data-think>${phase(23)}</g></g>`);
     // spacer collars on the posts between plates
     if (i < LAYERS - 1) for (const [x, y] of rest.slice(0, 2)) out.push(S(k.cylinder(x, y, 2.4, z + LAYER_H, LAYER_PITCH - LAYER_H, P, 16), { tone: "mid" }));
   }
@@ -393,8 +399,9 @@ const STEPS = [
 ];
 const PARTS = [
   { id: "context", step: 0, title: "Context", fact: "context · the words so far, as tokens", text: "Everything written so far. A real model cuts text into tokens, which are often whole words and sometimes pieces of words, and it sees every one of them at each step. Change the sentence with C (or the Sentence button) to see other examples." },
-  { id: "layers", step: 1, title: "Layers", fact: `layers · ${LAYERS} here, often dozens in practice`, text: "A stack of identical layers. When the machine reads, the head first takes in each token, then the plates light up one after another from the bottom: each layer works on what the layer below it handed up, so the work happens in order. The five lamps on each plate are the five tokens; all of them pass through every layer. What leaves the top is a summary of the whole context, ready for scoring." },
-  { id: "attention", on: "layers", step: 1, title: "Attention, inside each layer", fact: "attention · each token looks back, never ahead", text: "Inside every layer, each token takes in information from the tokens before it, more from some than others. The threads over the rail show it: the thicker a thread, the more the lit token draws on the word at its other end. In “the cat sat on the”, the last “the” leans on “on” and “cat”. That is how a word comes to mean that word in this sentence. A token never looks ahead, which is why the model writes left to right. The table under the figure shows every token's threads; pick a row (or press A) to see it on the bench." },
+  { id: "layers", step: 1, title: "Layers", fact: `layers · ${LAYERS} here, often dozens in practice`, text: "A stack of identical layers. Every token carries a running note up the stack (a long list of numbers, called the residual stream), and each layer adds a little to that note rather than replacing it. The plates light up one after another from the bottom because each one works on what the layer below handed up. The five lamps on a plate's side are the five tokens; the two on its front are the layer's two moves, look and then think. Lower layers tend to sort out grammar, higher ones meaning and what may come next. The close-up under the figure shows what each layer adds to the last word." },
+  { id: "attention", on: "layers", step: 1, title: "Look: attention, inside each layer", fact: "attention · each token looks back, never ahead", text: "Inside every layer, each token takes in information from the tokens before it, more from some than others. The threads over the rail show it: the thicker a thread, the more the lit token draws on the word at its other end. In “the cat sat on the”, the last “the” leans on “on” and “cat”. That is how a word comes to mean that word in this sentence. A token never looks ahead, which is why the model writes left to right. The table under the figure shows every token's threads; pick a row (or press A) to see it on the bench." },
+  { id: "think", on: "layers", step: 1, title: "Think: feed-forward, inside each layer", fact: "feed-forward · each token on its own, using what training stored", text: "The second move in every layer. Each token's note goes through a small network on its own, with no looking around, and comes out with something added: facts and patterns the model stored during training, such as “cats sit on mats”. Look gathers what the sentence says; think adds what the model knows. Most of a model's numbers live in these feed-forward parts." },
   { id: "scores", step: 2, title: "Scores", fact: "scores · one per word in the vocabulary", text: "The model gives a score (a logit) to every token it knows, tens of thousands of them. Here only six are shown. A score is not a probability yet: it can be any number, even negative." },
   { id: "temperature", step: 3, title: "Temperature", fact: "temperature · divides every score before softmax", text: "Softmax turns scores into odds that add up to 100%. Before that, every score is divided by the temperature. Below 1 the odds sharpen towards the top word, and above 1 they flatten towards an even spread." },
   { id: "topk", step: 3, title: "Top-k gate", fact: "top-k · only the k best words can be drawn", text: "Many systems cut the list before drawing: only the k highest-scoring words keep their odds, the rest drop to zero, and the odds are shared out again. Slide the gate to 3 (K, or the Top-k button) and long shots like moon can never be picked; at 1 the machine always writes the top word, which is called greedy decoding. Together with temperature, this is how a product trades surprise for safety." },
@@ -457,6 +464,10 @@ const sliderEl = stage.querySelector("[data-slider]");
 const topkButton = document.querySelector("[data-topk]");
 const guessButtons = [...document.querySelectorAll("[data-guess]")].sort((a, b) => a.dataset.guess - b.dataset.guess);
 const guessResult = document.querySelector("[data-guess-result]");
+const layerPicks = [...document.querySelectorAll("[data-lp]")].sort((a, b) => a.dataset.lp - b.dataset.lp);
+const lnTitle = document.querySelector("[data-ln-title]");
+const lnText = document.querySelector("[data-ln-text]");
+const lnBars = [...document.querySelectorAll("[data-lb]")].sort((a, b) => a.dataset.lb - b.dataset.lb);
 const attnRows = [...document.querySelectorAll("[data-q]")].sort((a, b) => a.dataset.q - b.dataset.q);
 
 let kIdx = 0;
@@ -477,8 +488,9 @@ const h = Array(N).fill(0); // piston rise
 const cut = Array(N).fill(0); // divider positions (running totals)
 let pin = 0, flight = 0, readAt = 0, segShow = 0, readClock = 0;
 // one pass of reading: the head sweeps the tiles, then the layers light bottom to top
-const SWEEP = 0.9, LAYER_T = 0.22, PASS = SWEEP + D.layers * LAYER_T + 0.5;
-const wave = () => (step === 1 ? (readClock % PASS) - SWEEP : -1) / LAYER_T; // < 0 while sweeping, then the layer index
+const SWEEP = 0.9, LAYER_T = 0.4, PASS = SWEEP + D.layers * LAYER_T + 0.5;
+let layerPin = null; // a layer the reader picked: the wave holds there
+const wave = () => (step !== 1 ? -1 : layerPin !== null ? layerPin + 0.99 : ((readClock % PASS) - SWEEP) / LAYER_T); // < 0 while sweeping, then the layer index (fraction: look, then think)
 const pinPos = (n) => (step >= 4 ? u : 0);
 // attention: which token is looking back (the last one unless the reader picks one)
 let query = 4, pinned = false, attnKey = "";
@@ -509,7 +521,8 @@ function lookText(q) {
 function stepText(n) {
   if (n === 0) return "“" + C.words.join(" ") + " …” · " + C.words.length + " tokens";
   if (n === 1 && pinned) return lookText(query);
-  if (n === 1) { const w = Math.floor(wave()); return w < 0 ? "reading · head takes in tokens" : w < D.layers ? "layer " + (w + 1) + " of " + D.layers + " · tokens look back" : "reading · summary to scoring"; }
+  if (n === 1 && layerPin !== null) return "layer " + (layerPin + 1) + " · " + C.notes[layerPin];
+  if (n === 1) { const v = wave(), w = Math.floor(v); return w < 0 ? "reading · head takes in tokens" : w < D.layers ? "layer " + (w + 1) + " of " + D.layers + (v - w < 0.5 ? " · look back" : " · think") : "reading · summary to scoring"; }
   if (n === 2) return "scores · " + C.cands.slice(0, 3).map((w, i) => w + " " + C.logits[i].toFixed(1)).join(" · ");
   if (n === 3) return tText(D.temps[temp]) + (D.topks[kIdx] < N ? " · top-" + D.topks[kIdx] : "") + " · " + topList();
   if (n === 4) return "draw · " + u.toFixed(2) + " → " + C.cands[winner];
@@ -524,6 +537,7 @@ function setStep(n) {
   if (n < 5) markWinner(false);
   if (n === 1) readClock = 0;
   if (n !== 1 && pinned) { pinned = false; query = 4; heat(); }
+  if (n !== 1 && layerPin !== null) { layerPin = null; layerPanel(); }
   step = n;
   controls();
   if (!touring) announce(stepText(step));
@@ -546,9 +560,33 @@ function setTopK(n) {
   run();
 }
 
+function setLayer(i) {
+  hold();
+  select(null);
+  pinned = false; query = 4; heat();
+  layerPin = Math.max(0, Math.min(D.layers - 1, i));
+  if (step !== 1) setStep(1);
+  layerPanel();
+  announce(stepText(1));
+  run();
+}
+// the close-up under the figure: what the picked layer adds, and the odds if scored there
+let panelLayer = D.layers - 1;
+function layerPanel() {
+  if (layerPin !== null) panelLayer = layerPin;
+  const i = panelLayer;
+  layerPicks.forEach((b, j) => (j === i ? b.setAttribute("data-on", "") : b.removeAttribute("data-on")));
+  lnTitle.textContent = "Layer " + (i + 1) + " of " + D.layers + (i === 0 ? " · bottom" : i === D.layers - 1 ? " · top" : "");
+  lnText.textContent = C.notes[i];
+  const f = (i + 1) / D.layers, top = Math.max(...C.logits);
+  const e = C.logits.map((z) => Math.exp((z - top) * f)), sum = e.reduce((a, b) => a + b, 0);
+  lnBars.forEach((bar, j) => { const p = e[j] / sum; bar.style.setProperty("--p", p.toFixed(4)); bar.querySelector("span").textContent = C.cands[j]; bar.querySelector("b").textContent = Math.round(p * 100) + "%"; });
+}
+
 function setQuery(q) {
   hold();
   select(null);
+  layerPin = null;
   query = (q + C.words.length) % C.words.length;
   pinned = true;
   if (step !== 1) setStep(1);
@@ -625,6 +663,7 @@ function setContext(n, auto) {
   C.cands.forEach((w, i) => { fit(word("cand-" + i), w, 4); word("seg-" + i).textContent = w; guessButtons[i].textContent = w; guessButtons[i].removeAttribute("data-on"); guessButtons[i].removeAttribute("data-win"); });
   attnKey = "";
   fillHeat();
+  layerPanel();
   if (!auto) { tries = hits = 0; expected = 0; guess = null; guessResult.textContent = ""; }
   markWinner(false);
   flight = 0;
@@ -746,6 +785,10 @@ function place() {
     const solid = layer.querySelector(".iso-solid");
     if (!!solid._on !== on) { solid._on = on; on ? solid.setAttribute("data-lit", "") : solid.removeAttribute("data-lit"); }
     layer.querySelector(".iso-dots").setAttribute("data-tone", on ? "hi" : step === 1 && i < w ? "mid" : "lo");
+    const frac = wave() - w;
+    const tone = (el, t) => { if (el._t2 !== t) { el._t2 = t; el.setAttribute("data-tone", t); } };
+    tone(layer.querySelector("[data-look] .iso-dots"), on && frac < 0.5 ? "hi" : step === 1 && i < w ? "mid" : "lo");
+    tone(layer.querySelector("[data-think] .iso-dots"), on && frac >= 0.5 ? "hi" : step === 1 && i < w ? "mid" : "lo");
   });
   const text = selected ? D.parts[selected].fact : stepText(step);
   if (readout.textContent !== text) readout.textContent = text;
@@ -753,13 +796,16 @@ function place() {
 
 // The idle tour walks the loop: context, read, score, softmax, draw, append, and again.
 const TOUR = 2.4;
+const BEATS = D.steps.map((_, i) => (i === 1 ? PASS + 0.3 : TOUR));
+const TOUR_ALL = BEATS.reduce((a, b) => a + b, 0);
 function tick(now) {
   const dt = last ? Math.min((now - last) / 1000, 1 / 30) : 1 / 60;
   last = now;
   clock += dt;
   if (touring) {
     tourClock += dt;
-    const beat = Math.floor(tourClock / TOUR) % (LAST + 1);
+    let t = tourClock % TOUR_ALL, beat = 0;
+    while (t >= BEATS[beat]) t -= BEATS[beat++];
     if (beat === 0 && step === LAST) setContext(ctx + 1, true);
     else if (beat !== step) setStep(beat);
   }
@@ -775,7 +821,7 @@ function hold() {
   idleTimer = setTimeout(() => {
     if (still.matches || selected || stage.matches(":hover, :focus-within")) return hold();
     touring = true;
-    tourClock = Math.max(0, step) * TOUR;
+    tourClock = BEATS.slice(0, Math.max(0, step)).reduce((a, b) => a + b, 0);
     run();
   }, 9000);
 }
@@ -800,7 +846,7 @@ stage.addEventListener("click", (event) => {
 });
 
 stage.addEventListener("keydown", (event) => {
-  const keys = { ArrowRight: () => go(step + 1), ArrowDown: () => go(step + 1), ArrowLeft: () => go(step - 1), ArrowUp: () => go(step - 1), Home: () => go(0), End: () => go(LAST), " ": forward, Enter: forward, Escape: () => { hold(); select(null); go(0); }, d: draw, D: draw, c: () => setContext(ctx + 1), C: () => setContext(ctx + 1), k: () => { hold(); setTopK(kIdx + 1); }, K: () => { hold(); setTopK(kIdx + 1); }, a: () => setQuery(pinned ? query + 1 : 1), A: () => setQuery(pinned ? query + 1 : 1), "[": () => { hold(); setTemp(temp - 1); }, "]": () => { hold(); setTemp(temp + 1); }, "-": () => { hold(); setTemp(temp - 1); }, "=": () => { hold(); setTemp(temp + 1); }, "+": () => { hold(); setTemp(temp + 1); } };
+  const keys = { ArrowRight: () => go(step + 1), ArrowDown: () => go(step + 1), ArrowLeft: () => go(step - 1), ArrowUp: () => go(step - 1), Home: () => go(0), End: () => go(LAST), " ": forward, Enter: forward, Escape: () => { hold(); select(null); go(0); }, d: draw, D: draw, c: () => setContext(ctx + 1), C: () => setContext(ctx + 1), k: () => { hold(); setTopK(kIdx + 1); }, l: () => setLayer(layerPin === null ? 0 : (layerPin + 1) % D.layers), L: () => setLayer(layerPin === null ? 0 : (layerPin + 1) % D.layers), K: () => { hold(); setTopK(kIdx + 1); }, a: () => setQuery(pinned ? query + 1 : 1), A: () => setQuery(pinned ? query + 1 : 1), "[": () => { hold(); setTemp(temp - 1); }, "]": () => { hold(); setTemp(temp + 1); }, "-": () => { hold(); setTemp(temp - 1); }, "=": () => { hold(); setTemp(temp + 1); }, "+": () => { hold(); setTemp(temp + 1); } };
   if (!keys[event.key]) return;
   event.preventDefault();
   keys[event.key]();
@@ -813,6 +859,7 @@ cooler.addEventListener("click", () => { hold(); setTemp(temp - 1); });
 warmer.addEventListener("click", () => { hold(); setTemp(temp + 1); });
 topkButton.addEventListener("click", () => { hold(); setTopK(kIdx + 1); });
 guessButtons.forEach((b, i) => b.addEventListener("click", () => guessWord(i)));
+layerPicks.forEach((b, i) => b.addEventListener("click", () => setLayer(i)));
 attnRows.forEach((row, i) => { row.addEventListener("click", () => setQuery(i)); row.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse" && !pinned) { hold(); select("attention"); query = i; } }); row.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse" && !pinned) { query = 4; select(null); } }); });
 
 for (const item of items) {
@@ -840,7 +887,7 @@ const plateBody = k.plateHtml({
     { mark: "raised", label: "Rail, layers, pistons and tape: everything that sets the odds" },
   ],
   caption: `A language model writes one token at a time. It reads the whole context through a stack of layers, one layer after another, and gives every word it knows a score. Softmax turns the scores into odds that add up to 100%, after dividing each score by the temperature. Then it draws: the odds are laid end to end along a tape, a random number picks a point, and the word under that point is appended to the context. The loop repeats for the next token. A top-k gate can first shut out all but the k best words. The scores and attention weights here are toy numbers; the arithmetic is real.`,
-  body: `<div class="iso-stage" tabindex="0" role="slider" aria-label="Language model. Arrow keys step through how it picks the next word; D draws a word; C changes the sentence; [ and ] change the temperature; K moves the top-k gate; A shows where a token looks; hover or tap a part to read about it." aria-valuemin="0" aria-valuemax="${STEPS.length - 1}" aria-valuenow="0" aria-valuetext="${STEPS[0].say}">${svg}</div>
+  body: `<div class="iso-stage" tabindex="0" role="slider" aria-label="Language model. Arrow keys step through how it picks the next word; D draws a word; C changes the sentence; [ and ] change the temperature; K moves the top-k gate; A shows where a token looks; L picks a layer; hover or tap a part to read about it." aria-valuemin="0" aria-valuemax="${STEPS.length - 1}" aria-valuenow="0" aria-valuetext="${STEPS[0].say}">${svg}</div>
 <div class="pc-controls"><button type="button" class="pc-btn" data-prev aria-label="Back one step" disabled>←</button><span class="pc-dots" aria-hidden="true">${STEPS.slice(1).map(() => "<i data-dot></i>").join("")}</span><button type="button" class="pc-btn pc-context" data-context aria-keyshortcuts="C">Sentence ↻</button><span class="pc-temp"><button type="button" class="pc-btn" data-cooler aria-label="Lower the temperature" aria-keyshortcuts="[">−</button><span data-temp>T 1.0</span><button type="button" class="pc-btn" data-warmer aria-label="Raise the temperature" aria-keyshortcuts="]">+</button></span><button type="button" class="pc-btn" data-topk aria-keyshortcuts="K" aria-label="Top-k gate: change how many words may be drawn">k all</button><button type="button" class="pc-btn" data-draw aria-keyshortcuts="D">Draw</button><button type="button" class="pc-btn pc-next" data-next><span>${STEPS[0].next}</span> →</button>${EXPAND_BUTTON}<span class="pc-live" aria-live="polite" data-live></span></div>
 <div class="pc-guess"><span class="pc-guess-q">Guess the next word</span><span class="pc-guess-words">${WORDS.map((w, i) => `<button type="button" class="pc-btn" data-guess="${i}">${w}</button>`).join("")}</span><span class="pc-guess-result" data-guess-result></span></div>`,
 });
@@ -860,6 +907,8 @@ const ARTICLE_CSS = `
 .pc-btn:disabled{color:var(--anatomy-lo);border-color:var(--anatomy-faint);cursor:default}
 .pc-context{margin-left:auto}
 [data-layer]>.iso-solid[data-lit]>.iso-shade{fill:var(--anatomy-hi)}
+[data-layer]:has(>.iso-solid[data-lit]) .iso-dots circle{fill:var(--anatomy-paper)}
+[data-layer]:has(>.iso-solid[data-lit]) .iso-dots[data-tone="lo"] circle{opacity:.35}
 .pc-temp{display:inline-flex;align-items:center;gap:6px;color:var(--anatomy-text);font-variant-numeric:tabular-nums}
 .pc-temp [data-temp]{min-width:44px;text-align:center}
 .pc-temp .pc-btn{padding:7px 9px}
@@ -872,6 +921,12 @@ const ARTICLE_CSS = `
 .pc-guess .pc-btn[data-on]{border-color:var(--anatomy-strong);box-shadow:inset 0 0 0 1px var(--anatomy-strong)}
 .pc-guess .pc-btn[data-win]{background:var(--anatomy-strong);color:var(--anatomy-card);border-color:var(--anatomy-strong)}
 .pc-guess-result{flex-basis:100%;min-height:14px;line-height:1.4;color:var(--anatomy-text)}
+.pc-layers{display:grid;grid-template-columns:auto 1fr;gap:16px;margin-top:8px}
+.pc-layer-pick{display:flex;flex-direction:column-reverse;gap:4px}
+.pc-layer-pick .pc-btn{width:36px;padding:5px 0;min-height:26px}
+.pc-layer-pick .pc-btn[data-on]{background:var(--anatomy-strong);color:var(--anatomy-card);border-color:var(--anatomy-strong)}
+.pc-layer-note b{display:block;font:12px ui-monospace,Menlo,monospace;color:var(--anatomy-muted);font-weight:400}
+.pc-layer-note p{margin:4px 0 10px;color:var(--anatomy-strong);font:600 17px/1.35 Georgia,serif}
 .pc-attn{display:grid;gap:4px;margin-top:8px;font:12px ui-monospace,Menlo,monospace;color:var(--anatomy-muted)}
 .pc-attn-head,.pc-attn-row{display:grid;grid-template-columns:64px repeat(5,minmax(0,1fr));gap:4px;align-items:center}
 .pc-attn-head span{text-align:center;overflow:hidden;text-overflow:ellipsis}
@@ -912,13 +967,16 @@ const ARTICLE_CSS = `
 `;
 const odds = `<h2>The odds now</h2><p class="tip">Change the temperature with − and + (or [ and ]), slide the top-k gate with K, or change the sentence with C, and watch the spread.</p><ol class="pc-odds">${WORDS.map((w, i) => `<li data-bar="${i}" style="--p:${probs0[i].toFixed(4)}"><span>${w}</span><i></i><b>${Math.round(probs0[i] * 100)}%</b></li>`).join("")}</ol>`;
 const C0 = CONTEXTS[0];
+const layerClose = `<h2>Inside the stack · what each layer adds</h2><p class="tip">Pick a layer (or press L) to hold the bench there. The note is what that layer adds to the last “${C0.words[4]}”, and the bars are the odds if scoring happened right after it: nearly even low down, sharp at the top. Notes and numbers are illustrative.</p>
+<div class="pc-layers"><div class="pc-layer-pick" role="group" aria-label="Pick a layer">${Array.from({ length: LAYERS }, (_, i) => `<button type="button" class="pc-btn" data-lp="${i}"${i === LAYERS - 1 ? " data-on" : ""}>${i + 1}</button>`).join("")}</div>
+<div class="pc-layer-note"><b data-ln-title>Layer ${LAYERS} of ${LAYERS} · top</b><p data-ln-text>${C0.notes[LAYERS - 1]}</p><ol class="pc-odds">${C0.cands.map((w, i) => `<li data-lb="${i}" style="--p:${probs0[i].toFixed(4)}"><span>${w}</span><i></i><b>${Math.round(probs0[i] * 100)}%</b></li>`).join("")}</ol></div></div>`;
 const attnTable = `<h2>Inside a layer · attention</h2><p class="tip">Each row is one token looking back at the tokens before it; the numbers are how much it draws on each (a row adds to 100). Nothing looks ahead. Click a row (or press A) to light its threads on the bench.</p>
 <div class="pc-attn"><div class="pc-attn-head"><span></span>${C0.words.map((w, j) => `<span data-aw="${j}">${w}</span>`).join("")}</div>${C0.words.map((w, i) => `<button type="button" class="pc-attn-row" data-q="${i}" aria-label="Show where token ${i + 1} looks"><span class="w" data-aw="${i}">${w}</span>${C0.words.map((_, j) => (j <= i ? `<i data-c="${i}-${j}" style="--w:${C0.attn[i][j]}"${C0.attn[i][j] >= 0.4 ? " data-strong" : ""}>${Math.round(C0.attn[i][j] * 100)}</i>` : `<i class="ahead" aria-hidden="true"></i>`)).join("")}</button>`).join("")}</div>`;
 const body = `<style>${CONTRAST_CSS}${ARTICLE_CSS}${EXPAND_CSS}</style>
 <nav class="pc-nav"><a href="../">← anatomy/of</a><span class="pc-versions">version <a href="../language-model-computer/">computer</a> · <a href="../language-model/">tower</a> · <a href="../language-model-bench/" aria-current="page">bench</a></span></nav>
 <header class="pc-head"><h1>Anatomy of a language model</h1><p>It doesn't plan a sentence. It picks one next word, from odds it works out fresh each time, and then does it again.</p></header>
 ${plateBody}
-<section class="pc-parts"><h2>The parts</h2><p class="tip">Point at a part to find it in the figure; click it to step the machine to it.</p><ol>${PARTS.map(({ id, title, text }, index) => `<li><div class="pc-part" data-select="${id}" tabindex="0" role="button" aria-label="${title}: show it in the figure"><span class="num">${String(index + 1).padStart(2, "0")}</span><h3>${title}</h3><p>${text}</p></div></li>`).join("")}</ol>${odds}${attnTable}</section>`;
+<section class="pc-parts"><h2>The parts</h2><p class="tip">Point at a part to find it in the figure; click it to step the machine to it.</p><ol>${PARTS.map(({ id, title, text }, index) => `<li><div class="pc-part" data-select="${id}" tabindex="0" role="button" aria-label="${title}: show it in the figure"><span class="num">${String(index + 1).padStart(2, "0")}</span><h3>${title}</h3><p>${text}</p></div></li>`).join("")}</ol>${odds}${layerClose}${attnTable}</section>`;
 
 const name = theme === "light" ? "index.html" : "dark.html";
 writeFileSync(join(HERE, name), k.pageHtml({ title: "Anatomy of a language model (bench)", theme, body, script: kitScript() + live + EXPAND_JS }));
