@@ -62,5 +62,13 @@
     "summary": "A dispatch counter split by a wall: tool cards and a question go to the model, a call slip comes back, and only the app's cabinet runs the function. Make a description vague or drop a required field and watch it go wrong.",
     "parts": 10,
     "thumb": "tool-calling/thumb.svg"
+  },
+  {
+    "slug": "agentic-loop",
+    "title": "an agentic loop",
+    "kind": "system",
+    "summary": "Step a loop bench: the model reads the whole context stack, picks a tool or answers, and every result is lifted back onto the stack until FINAL or the max_steps gate drops.",
+    "parts": 9,
+    "thumb": "agentic-loop/thumb.svg"
   }
 ]
