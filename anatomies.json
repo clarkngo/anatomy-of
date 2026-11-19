@@ -54,5 +54,13 @@
     "summary": "Follow a notification from a background job to a phone banner, then open one of four switches and compare what the backend and the phone report.",
     "parts": 7,
     "thumb": "push-chain/thumb.svg"
+  },
+  {
+    "slug": "tool-calling",
+    "title": "tool calling",
+    "kind": "system",
+    "summary": "A dispatch counter split by a wall: tool cards and a question go to the model, a call slip comes back, and only the app's cabinet runs the function. Make a description vague or drop a required field and watch it go wrong.",
+    "parts": 10,
+    "thumb": "tool-calling/thumb.svg"
   }
 ]
