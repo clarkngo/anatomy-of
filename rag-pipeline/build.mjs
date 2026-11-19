@@ -10,10 +10,13 @@
 // The documents, chunker and scores are the Module 2 simulator's own (model.mjs), at the
 // simulator's first tour settings: chunk size 30 words, overlap 5, so 15 chunks.
 import { k, EXPAND_BUTTON, embedHtml, partsHtml, page } from "../tools/embed.mjs";
-import { ingest, vec, cos, fingerprint } from "./model.mjs";
+import { readFileSync } from "node:fs";
+import { ingest, toks, vec, cos, fingerprint } from "./model.mjs";
+const { STOP, SYN } = JSON.parse(readFileSync(new URL("./docs.json", import.meta.url), "utf8"));
 
 // ---------- the model ----------
 const CHUNK = 30, OVERLAP = 5, K0 = 3;
+const THRESHOLDS = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]; // the minimum cosine a chunk needs to reach the prompt
 const { store, titles } = ingest(CHUNK, OVERLAP);
 const N = store.length; // 15
 const SHORT = ["Returns", "Shipping", "Warranty", "Tents", "Packs"];
@@ -22,6 +25,8 @@ const QUESTIONS = [
   { q: "Do Canadian orders pay customs fees?", lines: ["DO CANADIAN ORDERS", "PAY CUSTOMS FEES?"], fact: "customs fees", re: "customs fees" },
   { q: "How much is expedited shipping?", lines: ["HOW MUCH IS", "EXPEDITED SHIPPING?"], fact: "$15", re: "\\$15" },
   { q: "How long do I have to return an item?", lines: ["HOW LONG DO I HAVE", "TO RETURN AN ITEM?"], fact: "30 days", re: "30 days" },
+  // the fact is only the third-best chunk here: at k = 1 or 2 the answer has nothing to stand on
+  { q: "What is the warranty on backpacks?", lines: ["WHAT IS THE WARRANTY", "ON BACKPACKS?"], fact: "lifetime", re: "lifetime" },
 ].map((Q) => {
   const v = vec(Q.q);
   const scores = store.map((c) => cos(v, c.v));
@@ -88,6 +93,7 @@ const Q_BOARD = [BOARD.x + BOARD.w / 2, BOARD.y + BOARD.d - 9, BOARD_H + 0.8];
 const MODEL = { x: 54, y: -14, w: 46, d: 60, r: 3 };
 const MODEL_H = 22;
 const ANS = { x: MODEL.x + 7, y: MODEL.y + MODEL.d - 26, w: 32, d: 24, r: 0.8 };
+const LAMP = [MODEL.x + 38, MODEL.y + 50]; // the grounded lamp on the model's top
 const ANS_OUT = 22; // how far the answer slides out of the front slot
 
 const P = k.fitProjection(
@@ -249,6 +255,12 @@ function panel() {
   for (const [z, text] of [[z0, "0"], [z0 + RISE / 4, ".25"], [z0 + RISE / 2, ".5"]]) out.push(k.faceTextSvg(k.sideMatrix([PANEL.x + 6.5, face], z - 1.1, P, "left"), text, { size: 2.6, tone: "lo" }));
   out.push(k.faceTextSvg(k.sideMatrix([PANEL.x + PANEL.w - 4, face], PANEL_H - 5, P, "left"), "COSINE", { size: 2.6, tone: "lo", anchor: "end" }));
   out.push(Dt([[PANEL.x + 3, PANEL_H - 3], [PANEL.x + PANEL.w - 3, PANEL_H - 3], [PANEL.x + PANEL.w - 3, 3], [PANEL.x + 3, 3]].map(([x, z]) => at([x, face, z])), { size: 0.45 }));
+  // the threshold rod: a bar across the panel face at the minimum score, clamped at its right end
+  // (drawn at 0, moved up in the page); a card whose top clears it may reach the prompt
+  const rx0 = PANEL.x + 9, rx1 = PANEL.x + PANEL.w - 9;
+  const rod = `<path class="iso-line" data-tone="lit" style="stroke-width:1.2" d="${k.pathOf([at([rx0, face + 0.05, z0]), at([rx1, face + 0.05, z0])])}"/>` + Dt([at([rx0, face + 0.05, z0])], { size: 0.6, tone: "hi" });
+  const clamp = S(k.slabOf({ x: rx1, y: face, w: 5, d: 1.8, r: 0.3 }, z0 - 1.6, 3.2, P, 1), { tone: "hi" }) + Dt([at([rx1 + 2.5, face + 1.8, z0])], { size: 0.4 });
+  out.push(`<g data-thr>${rod}${clamp}</g>`);
   return out.join("");
 }
 function trough() {
@@ -367,6 +379,11 @@ function model() {
   const fy = MODEL.y + MODEL.d;
   out.push(L(k.pathOf([at([ANS.x - 1, fy, 3]), at([ANS.x + ANS.w + 1, fy, 3]), at([ANS.x + ANS.w + 1, fy, 5]), at([ANS.x - 1, fy, 5]), at([ANS.x - 1, fy, 3])]), { tone: "hi" }));
   out.push(screws(k.corners(MODEL, 3), MODEL_H, 0.45));
+  // the grounded lamp: lit when the answer's fact is in the chunks on the board
+  const [lx, ly] = LAMP;
+  out.push(S(k.cylinder(lx, ly, 3.2, MODEL_H, 0.8, P, 24), { tone: "mid" }));
+  out.push(`<g data-lamp>${S(k.cylinder(lx, ly, 2.2, MODEL_H + 0.8, 1.6, P, 20), { tone: "hi" })}</g>`);
+  out.push(k.faceTextSvg(k.sideMatrix([MODEL.x + MODEL.w - 4, MODEL.y + MODEL.d], MODEL_H - 8, P, "left"), "GROUNDED", { size: 2.4, tone: "lo", anchor: "end" }));
   return out.join("");
 }
 // the answer slip, drawn inside the model and slid out through the front slot
@@ -420,17 +437,18 @@ const PARTS = [
   { id: "chunker", step: 1, title: "Chunker", fact: `chunk · every ${CHUNK - OVERLAP} words, ${CHUNK} long`, text: `Splits each document into pieces of ${CHUNK} words, stepping back ${OVERLAP} each time so a sentence on a boundary appears whole in one piece. The HOS 2 starter uses 400 and 50, which leaves each short sample document as one chunk; the figure uses the simulator's smaller setting so you can see chunks compete.` },
   { id: "embedder", step: 2, title: "Embedding press", fact: "embed · one model, two task types", text: "Turns text into a vector, stamped here as a fingerprint. Chunks are embedded once at ingest with task type RETRIEVAL_DOCUMENT; each question is embedded with RETRIEVAL_QUERY by the same model, so the two land in the same space and can be compared." },
   { id: "store", step: 2, title: "Vector store (Chroma)", fact: `Chroma · ${N} vectors + their text`, text: "Keeps each chunk's vector next to its original text, on disk. Ingest fills it once. If you edit a document and don't re-run ingest, the file still holds the old cards and the app keeps answering from them." },
-  { id: "question", step: 3, title: "Question", fact: "question · embedded on every request", text: "What the user typed. Unlike the documents, it is embedded fresh on every request, so retrieval runs on every question." },
-  { id: "topk", step: 6, title: "Top-k", fact: "top-k · always returns k chunks", text: "Every chunk gets a cosine score against the question, and retrieve(k) keeps the k highest. It always returns k, even when only one is relevant: ask about customs fees and watch two weak cards ride along. The simulator's threshold is the fix." },
+  { id: "question", step: 3, title: "Question", fact: "question · embedded on every request", text: "What the user typed. Unlike the documents, it is embedded fresh on every request, so retrieval runs on every question. Type your own under the figure: it is scored by the same code. You will find it matches words, not meaning: “Can I send back a worn jacket?” scores best against the backpack guide, because “back” appears in “back panel”, while the return policy says “return”, not “send back”. Real embeddings handle synonyms far better, but the lesson holds: retrieval finds what is close to the question's wording." },
+  { id: "topk", step: 6, title: "Top-k", fact: "top-k · always returns k chunks", text: "Every chunk gets a cosine score against the question, and retrieve(k) keeps the k highest. It always returns k, even when only one is relevant: ask about customs fees and watch two weak cards ride along. The threshold is the fix." },
+  { id: "threshold", on: "store", step: 6, title: "Threshold", fact: "threshold · a chunk must score at least this", text: "The rod across the card file. A chunk reaches the prompt only if it is in the top k and its score clears the rod. Raise it and weak cards stop riding along; raise it too far and nothing gets through, and a well-built app has the model say it doesn't know rather than guess. Many vector stores take this as a minimum score or maximum distance next to k." },
   { id: "prompt", step: 7, title: "Prompt", fact: "prompt · system + chunks + question", text: "What the model actually receives: a system instruction, the retrieved chunks and the question. Scope the instruction to content questions and keep tools allowed, or the model stops calling calculate and nothing errors." },
-  { id: "model", step: 8, title: "Model", fact: "model · reads only the prompt", text: "Gemini sees only the board, never the whole file. If the fact isn't in the retrieved chunks, the answer can't be grounded in it, however good the model is." },
+  { id: "model", step: 8, title: "Model", fact: "model · reads only the prompt", text: "Gemini sees only the board, never the whole file. If the fact isn't in the retrieved chunks, the answer can't be grounded in it, however good the model is. The lamp on its top lights only when the answer's fact is on the board; ask “What is the warranty on backpacks?” at top-k 1 or 2 and watch it stay dark: the warranty overview outscores the backpack guide, which holds the answer. For a question you type, the bench can't know the right answer, so the lamp stays off and the slip names the chunks it answered from." },
 ];
 
 const unit = (vector) => { const o = at([0, 0, 0]); const p = at(vector); return [p[0] - o[0], p[1] - o[1]]; };
 const DATA = {
   EX: unit([1, 0, 0]), EY: unit([0, 1, 0]), EZ: unit([0, 0, 1]),
   P, steps: STEPS, n: N, k0: K0,
-  parts: Object.fromEntries(PARTS.map(({ id, step, fact }) => [id, { step, fact }])),
+  parts: Object.fromEntries(PARTS.map(({ id, step, fact, on }) => [id, { step, fact, on: on || id }])),
   questions: QUESTIONS.map(({ q, lines, fact, scores, order, has, fp }) => ({ q, lines, fact, scores, order, has, fp })),
   chunks: store.map((c, i) => ({ doc: SHORT[c.di], letter: LETTER[c.di], n: store.filter((d, j) => j <= i && d.di === c.di).length, text: c.text })),
   rise: RISE, cardX: store.map((_, i) => cardX(i)), card: { y: CARD.y, d: CARD.d, floor: FLOOR_H },
@@ -439,12 +457,17 @@ const DATA = {
   qHome: Q_HOME, qPress: [PRESS_SPOT[0], PRESS_SPOT[1], BED_H], qBoard: Q_BOARD,
   slipFrom: store.map((_, i) => [cardX(i), CARD.y + CARD.d / 2, FLOOR_H + CARD.h]),
   slipTo: [0, 1, 2, 3, 4].map((n) => [BOARD.x + BOARD.w / 2, slipY(n), BOARD_H]),
-  ansOut: ANS_OUT,
+  ansOut: ANS_OUT, thresholds: THRESHOLDS, stop: STOP, syn: SYN, vecs: store.map((c) => c.v),
   knob: KNOB, knobR: KNOB_R, knobZ: KNOB_Z[1], knobAngles: [0, 1, 2, 3, 4].map(knobAngle),
 };
 
 const live = `
 const D = ${JSON.stringify(DATA)};
+const STOP = D.stop, SYN = D.syn;
+${toks.toString()}
+${vec.toString()}
+${cos.toString()}
+${fingerprint.toString()}
 const LAST = D.steps.length - 1;
 const stage = ROOT.querySelector(".iso-stage");
 const readout = ROOT.querySelector("[data-readout]");
@@ -481,6 +504,13 @@ const ansText = stage.querySelector("[data-anstext]");
 const knobLine = stage.querySelector("[data-knob]");
 const groups = [...stage.querySelectorAll("[data-part]")];
 const teeth = cards.map((c) => c.querySelector("[data-teeth]"));
+const thrEl = stage.querySelector("[data-thr]");
+const lampEl = stage.querySelector("[data-lamp] .iso-solid");
+const lower = ROOT.querySelector("[data-lower]");
+const higher = ROOT.querySelector("[data-higher]");
+const askForm = ROOT.querySelector("[data-askform]");
+const askInput = ROOT.querySelector("[data-qinput]");
+const matchEl = ROOT.querySelector("[data-match]");
 
 const ease = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 const shift = (dx, dy, dz) => [D.EX[0] * dx + D.EY[0] * dy + D.EZ[0] * dz, D.EX[1] * dx + D.EY[1] * dy + D.EZ[1] * dz];
@@ -489,10 +519,13 @@ const setO = (el, o) => { const v = o >= 0.999 ? "" : o.toFixed(2); if (el._o !=
 const follow = (x, target, rate, dt) => { const nx = target + (x - target) * Math.exp(-rate * dt); return Math.abs(nx - target) < 0.002 ? target : nx; };
 const lerp3 = (a, b, f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
 
-let qi = 0, kk = D.k0, step = 0, selected = null;
+let qi = 0, kk = D.k0, step = 0, selected = null, ti = 0, custom = null, matchI = null;
 let touring = !still.matches, tourClock = 0, idleTimer = 0, visible = false, frame = 0, last = 0, clock = 0;
-const Q = () => D.questions[qi];
-const top = () => Q().order.slice(0, kk);
+const Q = () => custom || D.questions[qi];
+const thr = () => D.thresholds[ti];
+// the chunks that reach the prompt: the top k, and only those that clear the threshold
+const top = () => Q().order.slice(0, kk).filter((i) => Q().scores[i] >= thr() - 1e-9);
+const label = (i) => D.chunks[i].letter + D.chunks[i].n;
 const riseNow = new Array(N).fill(0);
 let filed = 0, cut = 0, travel = 0, qpos = 0, slipIn = 0, ansOut = 0, cycle = 0, mode = 0, printed = 0;
 
@@ -514,15 +547,18 @@ function goals() {
 function announce(text) { if (liveText.textContent !== text) liveText.textContent = text; }
 const pctS = (s) => s.toFixed(2);
 function factLine() {
-  const T = top(), found = T.find((i) => Q().has[i]);
+  const T = top();
+  if (!T.length) return "nothing clears " + thr().toFixed(1) + " · it says it doesn't know";
+  if (custom) return "answered from " + T.map(label).join(" · ") + " · is the answer in them?";
+  const found = T.find((i) => Q().has[i]);
   return found === undefined ? "fact missing from the top " + kk : "grounded · “" + Q().fact + "” in " + D.chunks[found].letter + D.chunks[found].n;
 }
 function stepText(n) {
   const T = top();
   if (n === 3) return "question · “" + Q().q + "”";
   if (n === 5) return "cosine · best " + T.slice(0, 3).map((i) => D.chunks[i].letter + D.chunks[i].n + " " + pctS(Q().scores[i])).join(" · ");
-  if (n === 6) return "top-" + kk + " · " + T.map((i) => pctS(Q().scores[i])).join(" · ");
-  if (n === 7) return "prompt · system + " + kk + " chunk" + (kk > 1 ? "s" : "") + " + question";
+  if (n === 6) return "top-" + kk + (ti ? " · min " + thr().toFixed(1) : "") + " · " + (T.length ? T.map((i) => pctS(Q().scores[i])).join(" · ") : "nothing clears it");
+  if (n === 7) return "prompt · system + " + T.length + " chunk" + (T.length === 1 ? "" : "s") + " + question";
   if (n === 8) return factLine();
   return D.steps[n].say;
 }
@@ -538,11 +574,56 @@ function setStep(n) {
 }
 
 function setQuestion(n) {
+  custom = null;
   qi = (n + D.questions.length) % D.questions.length;
+  freshQuestion();
+}
+function freshQuestion() {
+  matchI = null;
   qlines.forEach((el, j) => (el.textContent = Q().lines[j]));
   qprint.querySelector("path").setAttribute("d", printPath());
   fillSlips();
   bars.forEach(fillBar);
+  showMatch();
+}
+// a question the reader typed, scored by the simulator's own code
+function wrap(text) {
+  const words = text.toUpperCase().split(/\s+/).filter(Boolean), lines = [""];
+  for (const w of words) { const cur = lines[lines.length - 1]; if ((cur + " " + w).trim().length <= 20) lines[lines.length - 1] = (cur + " " + w).trim(); else if (lines.length < 2) lines.push(w.slice(0, 20)); else { lines[1] = lines[1].slice(0, 18) + " …"; break; } }
+  return [lines[0], lines[1] || ""];
+}
+function askOwn(text) {
+  text = text.trim().slice(0, 80);
+  if (!text) return;
+  hold();
+  select(null);
+  const v = vec(text);
+  const scores = D.vecs.map((c) => +cos(v, c).toFixed(4));
+  const order = scores.map((s, i) => [s, i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]).map(([, i]) => i);
+  custom = { q: text, lines: wrap(text), fact: null, scores, order, has: null, fp: fingerprint(v), v };
+  freshQuestion();
+  if (step < 3) step = 3; else step = 2;
+  setStep(3);
+  controls();
+  announce("your question · “" + text + "”");
+  if (!touring) setTimeout(() => { if (!touring && step === 3 && custom) setStep(5); }, 600);
+}
+// the close-up: one chunk's text with the words it shares with the question marked
+const esc = (t) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function showMatch(i) {
+  if (i !== undefined) matchI = i;
+  const c = matchI === null ? Q().order[0] : matchI;
+  const qv = custom ? custom.v : vec(Q().q);
+  const shared = new Set();
+  const html = D.chunks[c].text.split(/([A-Za-z0-9$]+)/).map((part, j) => {
+    if (j % 2 === 0) return esc(part);
+    const t = toks(part)[0];
+    if (t && qv[t]) { shared.add(t); return "<mark>" + esc(part) + "</mark>"; }
+    return esc(part);
+  }).join("");
+  const s = Q().scores[c], inPrompt = top().includes(c);
+  matchEl.innerHTML = '<p class="pc-match-head"><b>' + label(c) + " · " + D.chunks[c].doc + "</b> · cosine " + pctS(s) + " · " + (inPrompt ? "in the prompt" : s < thr() ? "below the threshold" : "not in the top " + kk) + '</p><p class="pc-match-words">' + (shared.size ? "shared words: " + [...shared].join(", ") : "no words in common with the question, so the score is 0") + '</p><p class="pc-match-text">' + html + "</p>";
+  bars.forEach((bar) => (Q().order[Number(bar.dataset.bar)] === c ? bar.setAttribute("data-pick", "") : bar.removeAttribute("data-pick")));
 }
 function printPath() {
   // rebuild the question's fingerprint bars from its own fingerprint
@@ -552,8 +633,8 @@ function printPath() {
 function fillSlips() {
   const T = top();
   slipText.forEach((el, n) => { const i = T[n]; el.textContent = i === undefined ? "" : D.chunks[i].letter + D.chunks[i].n + " · " + D.chunks[i].doc + " · " + pctS(Q().scores[i]); });
-  const found = T.find((i) => Q().has[i]);
-  ansText.textContent = found === undefined ? "NOT IN CONTEXT" : "“" + Q().fact + "”";
+  const found = custom ? undefined : T.find((i) => Q().has[i]);
+  ansText.textContent = !T.length ? "I DON'T KNOW" : custom ? "FROM " + T.slice(0, 3).map(label).join(" · ") : found === undefined ? "NOT IN CONTEXT" : "“" + Q().fact + "”";
   cards.forEach((c, i) => { const s = c.querySelector(".iso-solid"); if (step >= 6 && T.includes(i)) s.setAttribute("data-lit", ""); else s.removeAttribute("data-lit"); });
 }
 function fillBar(bar) {
@@ -561,7 +642,8 @@ function fillBar(bar) {
   bar.style.setProperty("--p", s.toFixed(4));
   bar.querySelector("span").textContent = D.chunks[i].letter + D.chunks[i].n + " " + D.chunks[i].doc;
   bar.querySelector("b").textContent = pctS(s);
-  if (r < kk) bar.setAttribute("data-on", ""); else bar.removeAttribute("data-on");
+  if (top().includes(i)) bar.setAttribute("data-on", ""); else bar.removeAttribute("data-on");
+  if (s < thr() - 1e-9) bar.setAttribute("data-below", ""); else bar.removeAttribute("data-below");
   bar.title = D.chunks[i].text;
 }
 
@@ -573,6 +655,17 @@ function setK(n) {
   knobLine.setAttribute("d", lineOnTop([D.knob[0] + Math.cos(a) * 1.4, D.knob[1] + Math.sin(a) * 1.4], [D.knob[0] + Math.cos(a) * (D.knobR - 2), D.knob[1] + Math.sin(a) * (D.knobR - 2)], D.knobZ, D.P));
   if (step < 6) setStep(6);
   controls();
+  announce(stepText(step));
+  run();
+}
+
+function setThreshold(n) {
+  n = Math.max(0, Math.min(D.thresholds.length - 1, n));
+  if (n === ti) return;
+  ti = n;
+  if (step < 6) setStep(6);
+  controls();
+  showMatch();
   announce(stepText(step));
   run();
 }
@@ -590,7 +683,7 @@ function ask() {
 function select(id) {
   if (selected === id) return;
   selected = id;
-  for (const g of groups) { if (id && g.dataset.part === id) g.setAttribute("data-on", ""); else g.removeAttribute("data-on"); }
+  for (const g of groups) { if (id && g.dataset.part === D.parts[id].on) g.setAttribute("data-on", ""); else g.removeAttribute("data-on"); }
   if (id) stage.setAttribute("data-focus", ""); else stage.removeAttribute("data-focus");
   for (const item of items) { if (item.dataset.select === id) item.setAttribute("data-on", ""); else item.removeAttribute("data-on"); }
   if (id) announce(D.parts[id].fact);
@@ -607,6 +700,9 @@ function controls() {
   fewer.disabled = kk === 1;
   more.disabled = kk === 5;
   ROOT.querySelector("[data-k]").textContent = "k " + kk;
+  lower.disabled = ti === 0;
+  higher.disabled = ti === D.thresholds.length - 1;
+  ROOT.querySelector("[data-min]").textContent = "min " + thr().toFixed(1);
   fillSlips();
   bars.forEach(fillBar);
 }
@@ -691,6 +787,12 @@ function place() {
   // the answer slides out of the model's front slot
   setT(answerEl, shift(0, D.ansOut * ease(ansOut), 0));
   setO(answerEl, ansOut > 0.02 ? 1 : 0);
+  // the threshold rod sits at the minimum score on the cosine rule
+  setT(thrEl, shift(0, 0, thr() * D.rise));
+  setO(thrEl, ti > 0 ? 1 : 0); // at 0 there is no rod to show: every card clears it
+  // the grounded lamp: only when the answer is out and its fact is on the board
+  const T2 = top(), lit = step === LAST && ansOut > 0.9 && !custom && T2.some((i) => Q().has[i]);
+  if (lit !== !!lampEl._lit) { lampEl._lit = lit; lit ? lampEl.setAttribute("data-lit", "") : lampEl.removeAttribute("data-lit"); }
   const text = selected ? D.parts[selected].fact : stepText(step);
   if (readout.textContent !== text) readout.textContent = text;
 }
@@ -733,9 +835,9 @@ new IntersectionObserver((entries) => { visible = entries[entries.length - 1].is
 const partAt = (target) => target.closest && target.closest("[data-part]");
 stage.addEventListener("pointermove", (event) => { if (event.pointerType !== "mouse") return; hold(); const g = partAt(event.target); select(g ? g.dataset.part : null); });
 stage.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") select(null); });
-stage.addEventListener("click", (event) => { hold(); const g = partAt(event.target); if (!g) return select(null); if (event.pointerType !== "mouse") select(selected === g.dataset.part ? null : g.dataset.part); });
+stage.addEventListener("click", (event) => { hold(); const c = event.target.closest && event.target.closest("[data-card]"); if (c && step >= 2) showMatch(Number(c.dataset.card)); const g = partAt(event.target); if (!g) return select(null); if (event.pointerType !== "mouse") select(selected === g.dataset.part ? null : g.dataset.part); });
 stage.addEventListener("keydown", (event) => {
-  const keys = { ArrowRight: () => go(step + 1), ArrowDown: () => go(step + 1), ArrowLeft: () => go(step - 1), ArrowUp: () => go(step - 1), Home: () => go(0), End: () => go(LAST), " ": forward, Enter: forward, Escape: () => { hold(); select(null); }, q: ask, Q: ask, "[": () => { hold(); setK(kk - 1); }, "]": () => { hold(); setK(kk + 1); }, "-": () => { hold(); setK(kk - 1); }, "=": () => { hold(); setK(kk + 1); }, "+": () => { hold(); setK(kk + 1); } };
+  const keys = { ArrowRight: () => go(step + 1), ArrowDown: () => go(step + 1), ArrowLeft: () => go(step - 1), ArrowUp: () => go(step - 1), Home: () => go(0), End: () => go(LAST), " ": forward, Enter: forward, Escape: () => { hold(); select(null); }, q: ask, Q: ask, "[": () => { hold(); setK(kk - 1); }, "]": () => { hold(); setK(kk + 1); }, "-": () => { hold(); setK(kk - 1); }, "=": () => { hold(); setK(kk + 1); }, "+": () => { hold(); setK(kk + 1); }, ",": () => { hold(); setThreshold(ti - 1); }, ".": () => { hold(); setThreshold(ti + 1); }, "<": () => { hold(); setThreshold(ti - 1); }, ">": () => { hold(); setThreshold(ti + 1); } };
   if (!keys[event.key]) return;
   event.preventDefault();
   keys[event.key]();
@@ -745,6 +847,12 @@ next.addEventListener("click", forward);
 askButton.addEventListener("click", ask);
 fewer.addEventListener("click", () => { hold(); setK(kk - 1); });
 more.addEventListener("click", () => { hold(); setK(kk + 1); });
+lower.addEventListener("click", () => { hold(); setThreshold(ti - 1); });
+higher.addEventListener("click", () => { hold(); setThreshold(ti + 1); });
+askForm.addEventListener("submit", (event) => { event.preventDefault(); askOwn(askInput.value); });
+askInput.addEventListener("keydown", (event) => event.stopPropagation());
+askInput.addEventListener("focus", hold);
+bars.forEach((bar) => { bar.addEventListener("click", () => { hold(); showMatch(Q().order[Number(bar.dataset.bar)]); }); });
 for (const item of items) {
   const id = item.dataset.select;
   item.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") { hold(); select(id); } });
@@ -770,13 +878,33 @@ const plateBody = k.plateHtml({
     { mark: "lit", label: "The top-k cards: the only chunks the model will see" },
     { mark: "raised", label: "Tray, cutter, press and file: ingest, run once" },
   ],
-  caption: `Retrieval-augmented generation in two phases. Ingest runs once: ${titles.length} documents are cut into ${N} chunks (${CHUNK} words, ${OVERLAP} overlap), each chunk is embedded and stored in Chroma with its text. Then, for every question, the same embedding model embeds the question, every stored chunk gets a cosine score, the top k go into the prompt with the system instruction, and the model answers from that prompt alone. The documents and scores are the AI 410 Module 2 simulator's: a word-count stand-in for a real embedding, with real arithmetic.`,
-  body: `<div class="iso-stage" tabindex="0" role="slider" aria-label="RAG pipeline. Arrow keys step through ingest and one question; Q asks the next question; [ and ] change top-k; hover or tap a part to read about it." aria-valuemin="0" aria-valuemax="${STEPS.length - 1}" aria-valuenow="0" aria-valuetext="${STEPS[0].say}">${svg}</div>
-<div class="pc-controls"><button type="button" class="pc-btn" data-prev aria-label="Back one step" disabled>←</button><span class="pc-dots" aria-hidden="true">${STEPS.slice(1).map(() => "<i data-dot></i>").join("")}</span><span class="pc-group pc-right"><button type="button" class="pc-btn" data-fewer aria-label="Fewer chunks (lower top-k)" aria-keyshortcuts="[">−</button><span data-k data-value>k ${K0}</span><button type="button" class="pc-btn" data-more aria-label="More chunks (raise top-k)" aria-keyshortcuts="]">+</button></span><button type="button" class="pc-btn" data-ask aria-keyshortcuts="Q">Next question</button><button type="button" class="pc-btn pc-next" data-next><span>${STEPS[0].next}</span> →</button>${EXPAND_BUTTON}<span class="pc-live" aria-live="polite" data-live></span></div>`,
+  caption: `Retrieval-augmented generation in two phases. Ingest runs once: ${titles.length} documents are cut into ${N} chunks (${CHUNK} words, ${OVERLAP} overlap), each chunk is embedded and stored in Chroma with its text. Then, for every question, the same embedding model embeds the question, every stored chunk gets a cosine score, the top k that clear the threshold go into the prompt with the system instruction, and the model answers from that prompt alone. The documents and scores are the AI 410 Module 2 simulator's: a word-count stand-in for a real embedding, with real arithmetic.`,
+  body: `<div class="iso-stage" tabindex="0" role="slider" aria-label="RAG pipeline. Arrow keys step through ingest and one question; Q asks the next question; [ and ] change top-k; comma and period change the threshold; click a card to see its matched words; hover or tap a part to read about it." aria-valuemin="0" aria-valuemax="${STEPS.length - 1}" aria-valuenow="0" aria-valuetext="${STEPS[0].say}">${svg}</div>
+<div class="pc-controls"><button type="button" class="pc-btn" data-prev aria-label="Back one step" disabled>←</button><span class="pc-dots" aria-hidden="true">${STEPS.slice(1).map(() => "<i data-dot></i>").join("")}</span><span class="pc-group pc-right"><button type="button" class="pc-btn" data-fewer aria-label="Fewer chunks (lower top-k)" aria-keyshortcuts="[">−</button><span data-k data-value>k ${K0}</span><button type="button" class="pc-btn" data-more aria-label="More chunks (raise top-k)" aria-keyshortcuts="]">+</button></span><span class="pc-group"><button type="button" class="pc-btn" data-lower aria-label="Lower the threshold" aria-keyshortcuts=",">−</button><span data-min data-value>min 0.0</span><button type="button" class="pc-btn" data-higher aria-label="Raise the threshold" aria-keyshortcuts=".">+</button></span><button type="button" class="pc-btn" data-ask aria-keyshortcuts="Q">Next question</button><button type="button" class="pc-btn pc-next" data-next><span>${STEPS[0].next}</span> →</button>${EXPAND_BUTTON}<span class="pc-live" aria-live="polite" data-live></span></div>
+<form class="pc-askform" data-askform><label for="rag-q">Ask your own</label><input id="rag-q" data-qinput maxlength="80" autocomplete="off" placeholder="e.g. Can I send back a worn jacket?"><button type="submit" class="pc-btn">Ask</button></form>`,
 });
 
-const scores = `<h4 style="margin:6px 0 0">Scores for this question</h4><p class="tip">The five best of ${N} chunks. The top k (bold) go into the prompt. Hover a row for the chunk's text.</p><ol class="pc-bars" style="margin-bottom:10px">${[0, 1, 2, 3, 4].map((r) => `<li data-bar="${r}" style="--p:0"><span></span><i></i><b></b></li>`).join("")}</ol>`;
-const html = embedHtml({ slug: "rag-pipeline", plate: plateBody, parts: partsHtml(PARTS, { extra: scores }), task: "Set top-k to 1 (press −) and step through all three questions. Does the one chunk still hold the answer? Then look at the scores: what were the other four adding at k = 5?", live });
+const scores = `<h4 style="margin:6px 0 0">Scores for this question</h4><p class="tip">The five best of ${N} chunks. The ones in bold go into the prompt: the top k that clear the threshold. Click a row, or a card in the figure, to see which words it shares with the question.</p><ol class="pc-bars" style="margin-bottom:10px">${[0, 1, 2, 3, 4].map((r) => `<li data-bar="${r}" style="--p:0"><span></span><i></i><b></b></li>`).join("")}</ol><div class="pc-match" data-match aria-live="polite"></div>`;
+const CSS = `
+.anatomy-embed [data-lamp] .iso-solid[data-lit]>.iso-fill,.anatomy-embed [data-lamp] .iso-solid[data-lit]>.iso-top,.anatomy-embed [data-lamp] .iso-solid[data-lit]>.iso-shade{fill:var(--anatomy-lit)}
+.anatomy-embed [data-lamp] .iso-solid>*{transition:fill .3s}
+.anatomy-embed [data-thr]{transition:opacity .3s}
+.anatomy-embed .pc-bars li{cursor:pointer}
+.anatomy-embed .pc-bars li[data-pick]{outline:1px solid var(--border);outline-offset:3px}
+.anatomy-embed .pc-bars li[data-below]{opacity:.5}
+.anatomy-embed .pc-askform{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:0 4px 8px;font:12px/1 var(--anatomy-mono)}
+.anatomy-embed .pc-askform label{color:var(--muted)}
+.anatomy-embed .pc-askform input{flex:1 1 220px;min-width:0;font:13px var(--anatomy-mono);color:var(--text);background:var(--surface);border:1px solid var(--border);padding:7px 9px;min-height:30px}
+.anatomy-embed .pc-askform input:focus{outline:1px solid var(--text);outline-offset:-1px}
+.anatomy-embed .pc-match{margin:4px 0 12px;padding:10px 12px;border:1px solid var(--border);background:var(--surface)}
+.anatomy-embed .pc-match p{margin:0}
+.anatomy-embed .pc-match-head{font:12px var(--anatomy-mono);color:var(--muted)}
+.anatomy-embed .pc-match-head b{color:var(--text)}
+.anatomy-embed .pc-match-words{font:12px var(--anatomy-mono);color:var(--muted);margin:4px 0 8px!important}
+.anatomy-embed .pc-match-text{font-size:.95rem;line-height:1.55;color:var(--text)}
+.anatomy-embed .pc-match mark{background:var(--text);color:var(--surface);padding:0 2px}
+`;
+const html = embedHtml({ slug: "rag-pipeline", plate: plateBody, parts: partsHtml(PARTS, { extra: scores }), css: CSS, task: "Ask “Can I send back a worn jacket?” and click the top card: which words matched? Then ask “Do Canadian orders pay customs fees?” and raise the threshold (min +) until the weak cards drop off, and once more until the model says it doesn't know. Last, press Q until “What is the warranty on backpacks?”, set top-k to 1 and watch the grounded lamp.", live });
 page("rag-pipeline", html, {
   title: "Anatomy of a RAG pipeline",
   lede: "A card-file bench: the documents are cut into chunks and filed once, then every question is embedded, scored against every card, and the top k go into the prompt.",
