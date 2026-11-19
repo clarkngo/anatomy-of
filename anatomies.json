@@ -70,5 +70,13 @@
     "summary": "Step a loop bench: the model reads the whole context stack, picks a tool or answers, and every result is lifted back onto the stack until FINAL or the max_steps gate drops.",
     "parts": 9,
     "thumb": "agentic-loop/thumb.svg"
+  },
+  {
+    "slug": "full-stack-app",
+    "title": "a full stack app",
+    "kind": "system",
+    "summary": "Send one request down a rail: the router turns it, auth checks the session, the handler asks the cache, and on a miss the ORM queries the database. Flip the index, flush the cache, expire the session.",
+    "parts": 10,
+    "thumb": "full-stack-app/thumb.svg"
   }
 ]
